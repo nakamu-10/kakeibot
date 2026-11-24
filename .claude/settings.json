@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(.dev.vars)",
+      "Bash(git push *--force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * -f)",
+      "Bash(git push * -f *)",
+      "Bash(git commit *--no-verify*)",
+      "Bash(git commit -n *)",
+      "Bash(git commit * -n)",
+      "Bash(git commit * -n *)",
+      "Bash(npx wrangler deploy*)",
+      "Bash(npm run deploy*)",
+      "Bash(npx wrangler secret *)",
+      "Bash(npx wrangler d1 * --remote*)",
+      "Bash(npm run db:init)"
+    ],
+    "ask": ["Bash(npm install *)", "Bash(npm i *)", "Bash(git push *)"],
+    "allow": [
+      "Read(.dev.vars.example)",
+      "Bash(npm run lint*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npm run format*)",
+      "Bash(npm run knip*)",
+      "Bash(npm test*)",
+      "Bash(npm run dev*)",
+      "Bash(npm run db:init:local*)",
+      "Bash(node scripts/webhook.mjs *)",
+      "Bash(npx wrangler d1 execute kakeibo --local *)"
+    ]
+  }
+}

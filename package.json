@@ -10,12 +10,24 @@
     "db:init:local": "wrangler d1 execute kakeibo --local --file=schema.sql",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "richmenu": "node scripts/richmenu.mjs"
+    "richmenu": "node scripts/richmenu.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "knip": "knip",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250101.0",
-    "typescript": "^5.6.0",
-    "vitest": "^2.1.0",
-    "wrangler": "^3.90.0"
+    "@cloudflare/workers-types": "4.20260702.1",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.15.0",
+    "eslint-config-prettier": "10.1.8",
+    "knip": "6.48.0",
+    "lefthook": "2.2.2",
+    "prettier": "3.10.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.74.0",
+    "vitest": "2.1.9",
+    "wrangler": "3.114.17"
   }
 }

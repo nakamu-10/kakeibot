@@ -1,0 +1,16 @@
+# 整形を先に、lintを後に流したいので jobs で順番を固定する
+pre-commit:
+  jobs:
+    # 秘密が混ざっていたら、整形より先に止める。gitleaksが無ければ飛ばし、CIで調べる
+    - name: secrets
+      run: |
+        if ! command -v gitleaks >/dev/null; then echo "gitleaksが無いので飛ばす（CIで調べる）"; exit 0; fi
+        gitleaks git --pre-commit --staged --redact --no-banner
+    - name: format
+      glob: '*.{js,mjs,ts,json,md,yml,yaml,html,css}'
+      run: npx prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: '*.{js,mjs,ts}'
+      run: npx eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
