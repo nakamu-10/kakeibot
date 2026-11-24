@@ -31,7 +31,9 @@ export async function handleEvent(env: Env, ev: LineEvent): Promise<void> {
   if (!ev.replyToken || !userId) return;
 
   if (ev.source.type !== 'user') {
-    await reply(env, ev.replyToken, [text('グループでの共有家計簿は次のバージョンで対応予定です。個別トークで使ってください。')]);
+    await reply(env, ev.replyToken, [
+      text('グループでの共有家計簿は次のバージョンで対応予定です。個別トークで使ってください。'),
+    ]);
     return;
   }
 
@@ -75,8 +77,14 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   }
   if (/^カテゴリ$/.test(t)) {
     const cats = await repo.categories(userId);
-    const ex = cats.filter((c) => c.type === 'expense').map((c) => c.name).join(' / ');
-    const inc = cats.filter((c) => c.type === 'income').map((c) => c.name).join(' / ');
+    const ex = cats
+      .filter((c) => c.type === 'expense')
+      .map((c) => c.name)
+      .join(' / ');
+    const inc = cats
+      .filter((c) => c.type === 'income')
+      .map((c) => c.name)
+      .join(' / ');
     return reply(env, replyToken, [text(`支出: ${ex}\n収入: ${inc}\n\n追加・並び替えは「グラフ」→設定から`)]);
   }
   const b = t.match(/^予算\s*(\d+)?\s*円?$/);
@@ -86,7 +94,13 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
       return reply(env, replyToken, [text(`月の予算を ${yen(parseInt(b[1], 10))} に設定しました。`)]);
     }
     const budget = await repo.budget(userId);
-    return reply(env, replyToken, [text(budget ? `今の月予算は ${yen(budget)} です。\n変更は「予算 50000」のように送ってください。` : '予算は未設定です。「予算 50000」のように送ってください。')]);
+    return reply(env, replyToken, [
+      text(
+        budget
+          ? `今の月予算は ${yen(budget)} です。\n変更は「予算 50000」のように送ってください。`
+          : '予算は未設定です。「予算 50000」のように送ってください。',
+      ),
+    ]);
   }
 
   // 記録
@@ -94,10 +108,12 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   const cats = await repo.categories(userId);
   const parsed = parseEntry(rest, cats);
   if (!parsed) {
-    return reply(env, replyToken, [text('うまく読み取れませんでした。「ランチ 800」のように送ってください。\n「ヘルプ」で使い方を表示します。')]);
+    return reply(env, replyToken, [
+      text('うまく読み取れませんでした。「ランチ 800」のように送ってください。\n「ヘルプ」で使い方を表示します。'),
+    ]);
   }
   const id = await repo.addEntry(userId, { ...parsed, date, source: 'text' });
-  const entry = (await repo.getEntry(userId, id))!;
+  const entry = await repo.mustGetEntry(userId, id);
   return replyRecorded(ctx, entry);
 }
 
@@ -111,11 +127,18 @@ async function handleImage(ctx: Ctx, messageId: string): Promise<void> {
     const cats = (await repo.categories(userId)).filter((c) => c.type === 'expense').map((c) => c.name);
     const r = await readReceipt(env, data, mime, cats, today);
     if (!r.isReceipt) {
-      return reply(env, replyToken, [text('レシートを読み取れませんでした。明るい場所で、レシート全体が写るように撮ってみてください。')]);
+      await reply(env, replyToken, [
+        text('レシートを読み取れませんでした。明るい場所で、レシート全体が写るように撮ってみてください。'),
+      ]);
+      return;
     }
     // 未来日付・極端に古い日付は今日に寄せる
     const date = r.date && r.date <= today && r.date >= shiftMonth(monthOf(today), -12) + '-01' ? r.date : today;
-    const memo = r.items.slice(0, 3).map((i) => i.name).join('、') + (r.items.length > 3 ? ' など' : '');
+    const memo =
+      r.items
+        .slice(0, 3)
+        .map((i) => i.name)
+        .join('、') + (r.items.length > 3 ? ' など' : '');
     const id = await repo.addEntry(userId, {
       type: 'expense',
       category: r.category,
@@ -125,8 +148,8 @@ async function handleImage(ctx: Ctx, messageId: string): Promise<void> {
       date,
       source: 'receipt',
     });
-    const entry = (await repo.getEntry(userId, id))!;
-    return replyRecorded(ctx, entry, 'レシートを読み取りました ✓');
+    const entry = await repo.mustGetEntry(userId, id);
+    await replyRecorded(ctx, entry, 'レシートを読み取りました ✓');
   } catch (e) {
     console.error(e);
     return reply(env, replyToken, [text('読み取り中にエラーが起きました。少し待ってからもう一度送ってください。')]);
@@ -154,7 +177,9 @@ async function handlePostback(ctx: Ctx, data: string): Promise<void> {
     return reply(env, replyToken, [
       text(
         'どのカテゴリに変更しますか？',
-        cats.slice(0, 13).map((c) => qrPostback(c.name, `action=setcat&id=${id}&c=${encodeURIComponent(c.name)}`, c.name)),
+        cats
+          .slice(0, 13)
+          .map((c) => qrPostback(c.name, `action=setcat&id=${id}&c=${encodeURIComponent(c.name)}`, c.name)),
       ),
     ]);
   }
@@ -162,7 +187,7 @@ async function handlePostback(ctx: Ctx, data: string): Promise<void> {
     const c = p.get('c');
     if (!c) return;
     await repo.updateEntry(userId, id, { category: c });
-    const updated = (await repo.getEntry(userId, id))!;
+    const updated = await repo.mustGetEntry(userId, id);
     return replyRecorded(ctx, updated, 'カテゴリを変更しました ✓');
   }
 }
@@ -199,7 +224,13 @@ async function replySummary(ctx: Ctx, month: string): Promise<void> {
   const s = await repo.monthSummary(userId, month);
   const budget = await repo.budget(userId);
   const [y, m] = month.split('-');
-  const lines = [`${y}年${Number(m)}月の家計簿`, '', `支出 ${yen(s.expense)}`, `収入 ${yen(s.income)}`, `収支 ${yen(s.income - s.expense)}`];
+  const lines = [
+    `${y}年${Number(m)}月の家計簿`,
+    '',
+    `支出 ${yen(s.expense)}`,
+    `収入 ${yen(s.income)}`,
+    `収支 ${yen(s.income - s.expense)}`,
+  ];
   if (budget) {
     lines.push(`予算残り ${yen(budget - s.expense)}（${Math.round((s.expense / budget) * 100)}% 使用）`);
   }

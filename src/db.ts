@@ -48,13 +48,17 @@ export class Repo {
     if (!cur) return;
     const stmts = [
       this.db
-        .prepare('UPDATE categories SET name = COALESCE(?, name), keywords = COALESCE(?, keywords) WHERE id = ? AND user_id = ?')
+        .prepare(
+          'UPDATE categories SET name = COALESCE(?, name), keywords = COALESCE(?, keywords) WHERE id = ? AND user_id = ?',
+        )
         .bind(fields.name ?? null, fields.keywords ?? null, id, userId),
     ];
     // 名前を変えたら過去の記録も付け替える
     if (fields.name && fields.name !== cur.name) {
       stmts.push(
-        this.db.prepare('UPDATE entries SET category = ? WHERE user_id = ? AND category = ?').bind(fields.name, userId, cur.name),
+        this.db
+          .prepare('UPDATE entries SET category = ? WHERE user_id = ? AND category = ?')
+          .bind(fields.name, userId, cur.name),
       );
     }
     await this.db.batch(stmts);
@@ -67,7 +71,9 @@ export class Repo {
   async reorderCategories(userId: string, ids: number[]): Promise<void> {
     if (!ids.length) return;
     await this.db.batch(
-      ids.map((id, i) => this.db.prepare('UPDATE categories SET sort = ? WHERE id = ? AND user_id = ?').bind(i, id, userId)),
+      ids.map((id, i) =>
+        this.db.prepare('UPDATE categories SET sort = ? WHERE id = ? AND user_id = ?').bind(i, id, userId),
+      ),
     );
   }
 
@@ -84,7 +90,15 @@ export class Repo {
   // ---------- 記録 ----------
   async addEntry(
     userId: string,
-    e: { type: EntryType; category: string; amount: number; memo?: string; store?: string; date: string; source?: string },
+    e: {
+      type: EntryType;
+      category: string;
+      amount: number;
+      memo?: string;
+      store?: string;
+      date: string;
+      source?: string;
+    },
   ): Promise<number> {
     const r = await this.db
       .prepare(
@@ -92,7 +106,8 @@ export class Repo {
       )
       .bind(userId, e.type, e.category, e.amount, e.memo ?? '', e.store ?? '', e.date, e.source ?? 'text')
       .first<{ id: number }>();
-    return r!.id;
+    if (!r) throw new Error('insert failed');
+    return r.id;
   }
 
   async getEntry(userId: string, id: number): Promise<Entry | null> {
@@ -102,9 +117,18 @@ export class Repo {
       .first<Entry>();
   }
 
+  /** 直前に作った・更新した記録を読む（無ければ例外） */
+  async mustGetEntry(userId: string, id: number): Promise<Entry> {
+    const e = await this.getEntry(userId, id);
+    if (!e) throw new Error(`entry ${id} not found`);
+    return e;
+  }
+
   async lastEntry(userId: string): Promise<Entry | null> {
     return this.db
-      .prepare('SELECT id, type, category, amount, memo, store, date, source FROM entries WHERE user_id = ? ORDER BY id DESC LIMIT 1')
+      .prepare(
+        'SELECT id, type, category, amount, memo, store, date, source FROM entries WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+      )
       .bind(userId)
       .first<Entry>();
   }
@@ -127,7 +151,7 @@ export class Repo {
 
   async deleteEntry(userId: string, id: number): Promise<boolean> {
     const r = await this.db.prepare('DELETE FROM entries WHERE id = ? AND user_id = ?').bind(id, userId).run();
-    return (r.meta.changes ?? 0) > 0;
+    return r.meta.changes > 0;
   }
 
   async entriesOfMonth(userId: string, month: string): Promise<Entry[]> {
@@ -143,7 +167,9 @@ export class Repo {
 
   async allEntries(userId: string): Promise<Entry[]> {
     const r = await this.db
-      .prepare('SELECT id, type, category, amount, memo, store, date, source FROM entries WHERE user_id = ? ORDER BY date, id')
+      .prepare(
+        'SELECT id, type, category, amount, memo, store, date, source FROM entries WHERE user_id = ? ORDER BY date, id',
+      )
       .bind(userId)
       .all<Entry>();
     return r.results;

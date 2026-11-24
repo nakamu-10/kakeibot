@@ -9,9 +9,22 @@ export interface CategoryLite {
 
 /** 新規ユーザーに入れる初期カテゴリ */
 export const DEFAULT_CATEGORIES: CategoryLite[] = [
-  { name: '食費', type: 'expense', keywords: 'ランチ,昼,昼食,朝食,夕食,夜ご飯,晩ご飯,ごはん,ご飯,コンビニ,スーパー,カフェ,コーヒー,スタバ,マック,弁当,パン,おやつ,外食,学食,牛丼,ラーメン' },
-  { name: '日用品', type: 'expense', keywords: 'ドラッグストア,薬局,洗剤,ティッシュ,トイレットペーパー,シャンプー,ダイソー,100均,ニトリ' },
-  { name: '交通費', type: 'expense', keywords: '電車,バス,タクシー,suica,pasmo,チャージ,ガソリン,駐車場,定期,新幹線,高速' },
+  {
+    name: '食費',
+    type: 'expense',
+    keywords:
+      'ランチ,昼,昼食,朝食,夕食,夜ご飯,晩ご飯,ごはん,ご飯,コンビニ,スーパー,カフェ,コーヒー,スタバ,マック,弁当,パン,おやつ,外食,学食,牛丼,ラーメン',
+  },
+  {
+    name: '日用品',
+    type: 'expense',
+    keywords: 'ドラッグストア,薬局,洗剤,ティッシュ,トイレットペーパー,シャンプー,ダイソー,100均,ニトリ',
+  },
+  {
+    name: '交通費',
+    type: 'expense',
+    keywords: '電車,バス,タクシー,suica,pasmo,チャージ,ガソリン,駐車場,定期,新幹線,高速',
+  },
   { name: '交際費', type: 'expense', keywords: '飲み会,飲み,プレゼント,ご祝儀,デート,誕生日' },
   { name: '趣味', type: 'expense', keywords: '本,漫画,ゲーム,映画,カラオケ,ライブ,パーツ,ガジェット,amazon,アマゾン' },
   { name: '衣服', type: 'expense', keywords: '服,靴,ユニクロ,gu,洋服' },
@@ -45,7 +58,7 @@ export function extractDate(input: string, today: string): { date: string; rest:
   ];
   for (const [re, n] of rel) if (re.test(s)) return { date: shift(n), rest: s.replace(re, '') };
 
-  const m = s.match(/^(?:(\d{4})[\/\-.])?(\d{1,2})[\/\-.月](\d{1,2})日?\s+/);
+  const m = s.match(/^(?:(\d{4})[/\-.])?(\d{1,2})[/\-.月](\d{1,2})日?\s+/);
   if (m) {
     const [ty, tm] = today.split('-').map(Number);
     const mo = Number(m[2]);
@@ -111,7 +124,10 @@ export function parseEntry(input: string, categories: CategoryLite[]): ParsedEnt
   const lower = label.toLowerCase();
   let best: { c: CategoryLite; len: number } | null = null;
   for (const c of pool) {
-    for (const kw of c.keywords.split(',').map((k) => k.trim().toLowerCase()).filter(Boolean)) {
+    for (const kw of c.keywords
+      .split(',')
+      .map((k) => k.trim().toLowerCase())
+      .filter(Boolean)) {
       if (lower.includes(kw) && (!best || kw.length > best.len)) best = { c, len: kw.length };
     }
   }
@@ -119,9 +135,9 @@ export function parseEntry(input: string, categories: CategoryLite[]): ParsedEnt
 
   // 3. 見つからない → その他
   if (forceIncome) {
-    const other = pick('income').find((c) => c.name === 'その他収入') ?? pick('income')[0];
+    const other = pick('income').find((c) => c.name === 'その他収入') ?? pick('income').at(0);
     return { type: 'income', category: other?.name ?? 'その他収入', amount, memo: label };
   }
-  const other = pick('expense').find((c) => c.name === 'その他') ?? pick('expense')[0];
+  const other = pick('expense').find((c) => c.name === 'その他') ?? pick('expense').at(0);
   return { type: 'expense', category: other?.name ?? 'その他', amount, memo: label };
 }

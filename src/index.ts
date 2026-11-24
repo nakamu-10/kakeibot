@@ -14,12 +14,14 @@ export default {
       const ok = await verifySignature(env.LINE_CHANNEL_SECRET, body, req.headers.get('x-line-signature'));
       if (!ok) return new Response('invalid signature', { status: 401 });
 
-      const { events = [] } = JSON.parse(body) as { events: Parameters<typeof handleEvent>[1][] };
+      const { events } = JSON.parse(body) as { events: Parameters<typeof handleEvent>[1][] };
       // LINEには即200を返し、処理はバックグラウンドで続ける（レシートAIは数秒かかるため）
       ctx.waitUntil(
         Promise.all(
           events.map((ev) =>
-            handleEvent(env, ev).catch((e) => console.error('event error', e)),
+            handleEvent(env, ev).catch((e: unknown) => {
+              console.error('event error', e);
+            }),
           ),
         ),
       );

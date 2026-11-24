@@ -56,7 +56,7 @@ export async function readReceipt(
     }),
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${await res.text()}`);
-  const json = (await res.json()) as { content: { type: string; text?: string }[] };
+  const json = await res.json<{ content: { type: string; text?: string }[] }>();
   const raw = json.content.find((c) => c.type === 'text')?.text ?? '';
   return parseReceiptJson(raw, expenseCategories);
 }
@@ -70,11 +70,16 @@ export function parseReceiptJson(raw: string, expenseCategories: string[]): Rece
   }
   const total = Math.round(Number(o.total) || 0);
   const date = typeof o.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date) ? o.date : null;
-  const cat = typeof o.category === 'string' && expenseCategories.includes(o.category) ? o.category : (expenseCategories.includes('その他') ? 'その他' : expenseCategories[0]);
+  const cat =
+    typeof o.category === 'string' && expenseCategories.includes(o.category)
+      ? o.category
+      : expenseCategories.includes('その他')
+        ? 'その他'
+        : expenseCategories[0];
   const items = Array.isArray(o.items)
     ? (o.items as { name?: unknown; price?: unknown }[])
-        .map((i) => ({ name: String(i.name ?? ''), price: Math.round(Number(i.price) || 0) }))
+        .map((i) => ({ name: typeof i.name === 'string' ? i.name : '', price: Math.round(Number(i.price) || 0) }))
         .filter((i) => i.name)
     : [];
-  return { isReceipt: total > 0, store: String(o.store ?? ''), date, total, category: cat, items };
+  return { isReceipt: total > 0, store: typeof o.store === 'string' ? o.store : '', date, total, category: cat, items };
 }

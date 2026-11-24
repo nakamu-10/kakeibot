@@ -28,7 +28,7 @@ export function yen(n: number): string {
 export function normalize(s: string): string {
   return s
     .replace(/[０-９Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-    .replace(/　/g, ' ')
+    .replace(/\u3000/g, ' ')
     .replace(/[＋]/g, '+')
     .replace(/[－−](?=\d)/g, '-')
     .replace(/[，,](?=\d{3})/g, '')

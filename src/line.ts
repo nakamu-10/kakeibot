@@ -90,6 +90,6 @@ export async function verifyIdToken(env: Env, idToken: string): Promise<string |
     body: new URLSearchParams({ id_token: idToken, client_id: env.LOGIN_CHANNEL_ID }),
   });
   if (!res.ok) return null;
-  const json = (await res.json()) as { sub?: string };
+  const json = await res.json<{ sub?: string }>();
   return json.sub ?? null;
 }

@@ -3,6 +3,8 @@ import { Repo } from './db';
 import { verifyIdToken } from './line';
 import { monthOf, todayJST } from './util';
 
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
@@ -16,11 +18,13 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   await repo.ensureUser(userId);
   const path = url.pathname.replace(/^\/api/, '');
   const method = req.method;
-  const body = method === 'GET' || method === 'DELETE' ? {} : ((await req.json().catch(() => ({}))) as Record<string, unknown>);
+  const body =
+    method === 'GET' || method === 'DELETE' ? {} : ((await req.json().catch(() => ({}))) as Record<string, unknown>);
 
   // 月のダッシュボード
   if (method === 'GET' && path === '/summary') {
-    const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') ?? '') ? url.searchParams.get('month')! : monthOf(todayJST());
+    const q = url.searchParams.get('month') ?? '';
+    const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
     const [summary, trend, budget, categories] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
@@ -43,7 +47,14 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const amount = Math.round(Number(body.amount) || 0);
     const date = typeof body.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : todayJST();
     if (amount <= 0 || typeof body.category !== 'string') return json({ error: 'invalid' }, 400);
-    const id = await repo.addEntry(userId, { type, category: body.category, amount, memo: String(body.memo ?? ''), date, source: 'app' });
+    const id = await repo.addEntry(userId, {
+      type,
+      category: body.category,
+      amount,
+      memo: str(body.memo),
+      date,
+      source: 'app',
+    });
     return json({ ok: true, id });
   }
   const entryMatch = path.match(/^\/entries\/(\d+)$/);
@@ -63,11 +74,11 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
 
   // カテゴリ
   if (method === 'POST' && path === '/categories') {
-    const name = String(body.name ?? '').trim().slice(0, 20);
+    const name = str(body.name).trim().slice(0, 20);
     const type: EntryType = body.type === 'income' ? 'income' : 'expense';
     if (!name) return json({ error: 'invalid' }, 400);
     try {
-      await repo.addCategory(userId, name, type, String(body.keywords ?? ''));
+      await repo.addCategory(userId, name, type, str(body.keywords));
     } catch {
       return json({ error: '同じ名前のカテゴリがあります' }, 409);
     }
@@ -101,10 +112,17 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const csv =
       '﻿日付,種別,カテゴリ,金額,店名,メモ,入力方法\n' +
       rows
-        .map((r) => [r.date, r.type === 'income' ? '収入' : '支出', r.category, r.amount, r.store, r.memo, r.source].map(esc).join(','))
+        .map((r) =>
+          [r.date, r.type === 'income' ? '収入' : '支出', r.category, r.amount, r.store, r.memo, r.source]
+            .map(esc)
+            .join(','),
+        )
         .join('\n');
     return new Response(csv, {
-      headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': 'attachment; filename="kakeibo.csv"' },
+      headers: {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': 'attachment; filename="kakeibo.csv"',
+      },
     });
   }
 
