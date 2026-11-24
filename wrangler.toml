@@ -1,0 +1,24 @@
+name = "line-kakeibo-bot"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# LIFF画面(HTML)を文字列としてimportする
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kakeibo"
+database_id = "ここに wrangler d1 create kakeibo で出たIDを貼る"
+
+[vars]
+LIFF_ID = "ここにLIFF IDを貼る"
+LOGIN_CHANNEL_ID = "ここにLINEログインチャネルのチャネルIDを貼る"
+RECEIPT_MODEL = "claude-haiku-5-5"
+
+# シークレットは以下で登録（tomlには書かない）
+# wrangler secret put LINE_CHANNEL_SECRET
+# wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
+# wrangler secret put ANTHROPIC_API_KEY
