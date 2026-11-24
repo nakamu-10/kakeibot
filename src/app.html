@@ -1,404 +1,703 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>家計簿</title>
-<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<style>
-  :root {
-    --ink: #1f2328; --sub: #6a737d; --line: #e3e5e8; --bg: #fafaf8;
-    --accent: #2f6b4f; --expense: #b5523b; --income: #2f6b4f;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-         color: var(--ink); background: var(--bg); font-size: 15px; line-height: 1.6;
-         padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
-  header { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line);
-           display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px; z-index: 5; }
-  header button { background: none; border: none; font-size: 20px; color: var(--sub); padding: 0 8px; }
-  header h1 { font-size: 16px; font-weight: 600; margin: 0; min-width: 120px; text-align: center; }
-  main { max-width: 640px; margin: 0 auto; padding: 0 16px; }
-  section { padding: 18px 0; border-bottom: 1px solid var(--line); }
-  h2 { font-size: 13px; font-weight: 600; color: var(--sub); margin: 0 0 10px; letter-spacing: .04em; }
-  table { width: 100%; border-collapse: collapse; }
-  td { padding: 5px 0; }
-  td.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .expense { color: var(--expense); } .income { color: var(--income); }
-  .bar { height: 6px; background: var(--line); margin-top: 8px; }
-  .bar > div { height: 100%; background: var(--accent); }
-  .bar.over > div { background: var(--expense); }
-  .muted { color: var(--sub); font-size: 13px; }
-  .chart-box { position: relative; height: 200px; }
-  .legend td:first-child { width: 14px; }
-  .dot { display: inline-block; width: 9px; height: 9px; }
-  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: #fff;
-        border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
-  nav button { flex: 1; background: none; border: none; padding: 12px 0; font-size: 13px; color: var(--sub); }
-  nav button.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 2px 0 var(--ink); }
-  .tab { display: none; } .tab.on { display: block; }
-  .row { display: flex; justify-content: space-between; align-items: baseline; padding: 9px 0;
-         border-bottom: 1px solid var(--line); }
-  .row:last-child { border-bottom: none; }
-  .row .meta { font-size: 12px; color: var(--sub); }
-  .date-head { font-size: 12px; color: var(--sub); padding-top: 12px; }
-  input, select { font: inherit; padding: 7px 8px; border: 1px solid #c9ccd1; background: #fff; border-radius: 2px; width: 100%; }
-  .btn { font: inherit; padding: 7px 14px; border: 1px solid var(--ink); background: var(--ink); color: #fff; border-radius: 2px; }
-  .btn.ghost { background: #fff; color: var(--ink); }
-  .btn.danger { background: #fff; color: var(--expense); border-color: var(--expense); }
-  .form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .form .full { grid-column: 1 / -1; }
-  .cat-item { display: flex; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
-  .cat-item span { flex: 1; }
-  .cat-item button { background: none; border: 1px solid var(--line); padding: 2px 8px; font-size: 13px; }
-  dialog { border: 1px solid var(--line); padding: 18px; width: min(92vw, 420px); }
-  dialog::backdrop { background: rgba(0,0,0,.25); }
-  #status { text-align: center; padding: 40px 0; color: var(--sub); }
-</style>
-</head>
-<body>
-<header id="monthbar">
-  <button id="prev" aria-label="前の月">‹</button>
-  <h1 id="month">—</h1>
-  <button id="next" aria-label="次の月">›</button>
-</header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>家計簿</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+      :root {
+        --ink: #1f2328;
+        --sub: #6a737d;
+        --line: #e3e5e8;
+        --bg: #fafaf8;
+        --accent: #2f6b4f;
+        --expense: #b5523b;
+        --income: #2f6b4f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        font-size: 15px;
+        line-height: 1.6;
+        padding-bottom: calc(64px + env(safe-area-inset-bottom));
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 10px;
+        z-index: 5;
+      }
+      header button {
+        background: none;
+        border: none;
+        font-size: 20px;
+        color: var(--sub);
+        padding: 0 8px;
+      }
+      header h1 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        min-width: 120px;
+        text-align: center;
+      }
+      main {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: 0 16px;
+      }
+      section {
+        padding: 18px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--sub);
+        margin: 0 0 10px;
+        letter-spacing: 0.04em;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      td {
+        padding: 5px 0;
+      }
+      td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .expense {
+        color: var(--expense);
+      }
+      .income {
+        color: var(--income);
+      }
+      .bar {
+        height: 6px;
+        background: var(--line);
+        margin-top: 8px;
+      }
+      .bar > div {
+        height: 100%;
+        background: var(--accent);
+      }
+      .bar.over > div {
+        background: var(--expense);
+      }
+      .muted {
+        color: var(--sub);
+        font-size: 13px;
+      }
+      .chart-box {
+        position: relative;
+        height: 200px;
+      }
+      .legend td:first-child {
+        width: 14px;
+      }
+      .dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+      }
+      nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        background: #fff;
+        border-top: 1px solid var(--line);
+        padding-bottom: env(safe-area-inset-bottom);
+        z-index: 5;
+      }
+      nav button {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 12px 0;
+        font-size: 13px;
+        color: var(--sub);
+      }
+      nav button.on {
+        color: var(--ink);
+        font-weight: 600;
+        box-shadow: inset 0 2px 0 var(--ink);
+      }
+      .tab {
+        display: none;
+      }
+      .tab.on {
+        display: block;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .row:last-child {
+        border-bottom: none;
+      }
+      .row .meta {
+        font-size: 12px;
+        color: var(--sub);
+      }
+      .date-head {
+        font-size: 12px;
+        color: var(--sub);
+        padding-top: 12px;
+      }
+      input,
+      select {
+        font: inherit;
+        padding: 7px 8px;
+        border: 1px solid #c9ccd1;
+        background: #fff;
+        border-radius: 2px;
+        width: 100%;
+      }
+      .btn {
+        font: inherit;
+        padding: 7px 14px;
+        border: 1px solid var(--ink);
+        background: var(--ink);
+        color: #fff;
+        border-radius: 2px;
+      }
+      .btn.ghost {
+        background: #fff;
+        color: var(--ink);
+      }
+      .btn.danger {
+        background: #fff;
+        color: var(--expense);
+        border-color: var(--expense);
+      }
+      .form {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .form .full {
+        grid-column: 1 / -1;
+      }
+      .cat-item {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .cat-item span {
+        flex: 1;
+      }
+      .cat-item button {
+        background: none;
+        border: 1px solid var(--line);
+        padding: 2px 8px;
+        font-size: 13px;
+      }
+      dialog {
+        border: 1px solid var(--line);
+        padding: 18px;
+        width: min(92vw, 420px);
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.25);
+      }
+      #status {
+        text-align: center;
+        padding: 40px 0;
+        color: var(--sub);
+      }
+    </style>
+  </head>
+  <body>
+    <header id="monthbar">
+      <button id="prev" aria-label="前の月">‹</button>
+      <h1 id="month">—</h1>
+      <button id="next" aria-label="次の月">›</button>
+    </header>
 
-<main>
-  <div id="status">読み込み中…</div>
+    <main>
+      <div id="status">読み込み中…</div>
 
-  <!-- ホーム -->
-  <div class="tab on" id="tab-home">
-    <section>
-      <h2>今月の収支</h2>
-      <table>
-        <tr><td>支出</td><td class="num expense" id="s-expense"></td></tr>
-        <tr><td>収入</td><td class="num income" id="s-income"></td></tr>
-        <tr><td>収支</td><td class="num" id="s-balance"></td></tr>
-      </table>
-      <div id="budget-box" style="margin-top:10px">
-        <div class="muted" id="budget-text"></div>
-        <div class="bar" id="budget-bar"><div></div></div>
+      <!-- ホーム -->
+      <div class="tab on" id="tab-home">
+        <section>
+          <h2>今月の収支</h2>
+          <table>
+            <tr>
+              <td>支出</td>
+              <td class="num expense" id="s-expense"></td>
+            </tr>
+            <tr>
+              <td>収入</td>
+              <td class="num income" id="s-income"></td>
+            </tr>
+            <tr>
+              <td>収支</td>
+              <td class="num" id="s-balance"></td>
+            </tr>
+          </table>
+          <div id="budget-box" style="margin-top: 10px">
+            <div class="muted" id="budget-text"></div>
+            <div class="bar" id="budget-bar"><div></div></div>
+          </div>
+        </section>
+        <section>
+          <h2>日別の支出</h2>
+          <div class="chart-box"><canvas id="c-daily"></canvas></div>
+        </section>
+        <section>
+          <h2>カテゴリ別</h2>
+          <div class="chart-box" style="height: 180px"><canvas id="c-cat"></canvas></div>
+          <table class="legend" id="cat-table" style="margin-top: 10px"></table>
+        </section>
       </div>
-    </section>
-    <section>
-      <h2>日別の支出</h2>
-      <div class="chart-box"><canvas id="c-daily"></canvas></div>
-    </section>
-    <section>
-      <h2>カテゴリ別</h2>
-      <div class="chart-box" style="height:180px"><canvas id="c-cat"></canvas></div>
-      <table class="legend" id="cat-table" style="margin-top:10px"></table>
-    </section>
-  </div>
 
-  <!-- 推移 -->
-  <div class="tab" id="tab-trend">
-    <section>
-      <h2>直近6か月の推移</h2>
-      <div class="chart-box" style="height:240px"><canvas id="c-trend"></canvas></div>
-    </section>
-    <section>
-      <h2>月比較</h2>
-      <table id="trend-table"></table>
-    </section>
-  </div>
-
-  <!-- 履歴 -->
-  <div class="tab" id="tab-list">
-    <section>
-      <h2>記録を追加</h2>
-      <div class="form">
-        <select id="a-type"><option value="expense">支出</option><option value="income">収入</option></select>
-        <select id="a-cat"></select>
-        <input id="a-amount" type="number" inputmode="numeric" placeholder="金額">
-        <input id="a-date" type="date">
-        <input id="a-memo" class="full" placeholder="メモ（任意）">
-        <button class="btn full" id="a-add">追加</button>
+      <!-- 推移 -->
+      <div class="tab" id="tab-trend">
+        <section>
+          <h2>直近6か月の推移</h2>
+          <div class="chart-box" style="height: 240px"><canvas id="c-trend"></canvas></div>
+        </section>
+        <section>
+          <h2>月比較</h2>
+          <table id="trend-table"></table>
+        </section>
       </div>
-    </section>
-    <section>
-      <h2>この月の記録</h2>
-      <div id="entries"></div>
-    </section>
-  </div>
 
-  <!-- 設定 -->
-  <div class="tab" id="tab-settings">
-    <section>
-      <h2>月の予算</h2>
-      <div style="display:flex; gap:8px">
-        <input id="budget-input" type="number" inputmode="numeric" placeholder="例: 50000">
-        <button class="btn" id="budget-save" style="white-space:nowrap">保存</button>
+      <!-- 履歴 -->
+      <div class="tab" id="tab-list">
+        <section>
+          <h2>記録を追加</h2>
+          <div class="form">
+            <select id="a-type">
+              <option value="expense">支出</option>
+              <option value="income">収入</option>
+            </select>
+            <select id="a-cat"></select>
+            <input id="a-amount" type="number" inputmode="numeric" placeholder="金額" />
+            <input id="a-date" type="date" />
+            <input id="a-memo" class="full" placeholder="メモ（任意）" />
+            <button class="btn full" id="a-add">追加</button>
+          </div>
+        </section>
+        <section>
+          <h2>この月の記録</h2>
+          <div id="entries"></div>
+        </section>
       </div>
-      <p class="muted">0 にすると予算表示をオフにします。</p>
-    </section>
-    <section>
-      <h2>支出カテゴリ</h2>
-      <div id="cats-expense"></div>
-    </section>
-    <section>
-      <h2>収入カテゴリ</h2>
-      <div id="cats-income"></div>
-    </section>
-    <section>
-      <h2>カテゴリを追加</h2>
-      <div class="form">
-        <input id="nc-name" placeholder="名前">
-        <select id="nc-type"><option value="expense">支出</option><option value="income">収入</option></select>
-        <input id="nc-kw" class="full" placeholder="自動判定キーワード（カンマ区切り・任意）">
-        <button class="btn full" id="nc-add">追加</button>
+
+      <!-- 設定 -->
+      <div class="tab" id="tab-settings">
+        <section>
+          <h2>月の予算</h2>
+          <div style="display: flex; gap: 8px">
+            <input id="budget-input" type="number" inputmode="numeric" placeholder="例: 50000" />
+            <button class="btn" id="budget-save" style="white-space: nowrap">保存</button>
+          </div>
+          <p class="muted">0 にすると予算表示をオフにします。</p>
+        </section>
+        <section>
+          <h2>支出カテゴリ</h2>
+          <div id="cats-expense"></div>
+        </section>
+        <section>
+          <h2>収入カテゴリ</h2>
+          <div id="cats-income"></div>
+        </section>
+        <section>
+          <h2>カテゴリを追加</h2>
+          <div class="form">
+            <input id="nc-name" placeholder="名前" />
+            <select id="nc-type">
+              <option value="expense">支出</option>
+              <option value="income">収入</option>
+            </select>
+            <input id="nc-kw" class="full" placeholder="自動判定キーワード（カンマ区切り・任意）" />
+            <button class="btn full" id="nc-add">追加</button>
+          </div>
+        </section>
+        <section>
+          <h2>データ</h2>
+          <button class="btn ghost" id="export">CSVを書き出す</button>
+          <p class="muted">Excel・Googleスプレッドシートで開けます。</p>
+        </section>
       </div>
-    </section>
-    <section>
-      <h2>データ</h2>
-      <button class="btn ghost" id="export">CSVを書き出す</button>
-      <p class="muted">Excel・Googleスプレッドシートで開けます。</p>
-    </section>
-  </div>
-</main>
+    </main>
 
-<nav>
-  <button data-tab="home" class="on">ホーム</button>
-  <button data-tab="trend">推移</button>
-  <button data-tab="list">履歴</button>
-  <button data-tab="settings">設定</button>
-</nav>
+    <nav>
+      <button data-tab="home" class="on">ホーム</button>
+      <button data-tab="trend">推移</button>
+      <button data-tab="list">履歴</button>
+      <button data-tab="settings">設定</button>
+    </nav>
 
-<dialog id="edit">
-  <form method="dialog" class="form" id="edit-form">
-    <div class="full muted" id="e-title">記録を編集</div>
-    <select id="e-cat" class="full"></select>
-    <input id="e-amount" type="number" inputmode="numeric">
-    <input id="e-date" type="date">
-    <input id="e-memo" class="full" placeholder="メモ">
-    <button class="btn danger" value="delete" type="submit">削除</button>
-    <button class="btn" value="save" type="submit">保存</button>
-    <button class="btn ghost full" value="cancel" type="submit">閉じる</button>
-  </form>
-</dialog>
+    <dialog id="edit">
+      <form method="dialog" class="form" id="edit-form">
+        <div class="full muted" id="e-title">記録を編集</div>
+        <select id="e-cat" class="full"></select>
+        <input id="e-amount" type="number" inputmode="numeric" />
+        <input id="e-date" type="date" />
+        <input id="e-memo" class="full" placeholder="メモ" />
+        <button class="btn danger" value="delete" type="submit">削除</button>
+        <button class="btn" value="save" type="submit">保存</button>
+        <button class="btn ghost full" value="cancel" type="submit">閉じる</button>
+      </form>
+    </dialog>
 
-<script>
-const LIFF_ID = '__LIFF_ID__';
-const PALETTE = ['#2f6b4f','#b5523b','#3d5a80','#c08a2e','#6d597a','#5b8e7d','#8d6e63','#4f6d7a','#a3a15a','#7a7a7a','#9c6644','#567568'];
-const $ = (id) => document.getElementById(id);
-const yen = (n) => (n < 0 ? '-¥' : '¥') + Math.abs(n).toLocaleString('ja-JP');
-let token = null, data = null, month = null, charts = {};
+    <script>
+      const LIFF_ID = '__LIFF_ID__';
+      const PALETTE = [
+        '#2f6b4f',
+        '#b5523b',
+        '#3d5a80',
+        '#c08a2e',
+        '#6d597a',
+        '#5b8e7d',
+        '#8d6e63',
+        '#4f6d7a',
+        '#a3a15a',
+        '#7a7a7a',
+        '#9c6644',
+        '#567568',
+      ];
+      const $ = (id) => document.getElementById(id);
+      const yen = (n) => (n < 0 ? '-¥' : '¥') + Math.abs(n).toLocaleString('ja-JP');
+      let token = null,
+        data = null,
+        month = null,
+        charts = {};
 
-async function api(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    ...opts,
-    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(opts.headers || {}) },
-  });
-  if (res.status === 401) { liff.login(); throw new Error('unauthorized'); }
-  if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.error || 'エラーが発生しました'); throw new Error(res.status); }
-  return path.endsWith('.csv') ? res.blob() : res.json();
-}
+      async function api(path, opts = {}) {
+        const res = await fetch('/api' + path, {
+          ...opts,
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(opts.headers || {}) },
+        });
+        if (res.status === 401) {
+          liff.login();
+          throw new Error('unauthorized');
+        }
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          alert(e.error || 'エラーが発生しました');
+          throw new Error(res.status);
+        }
+        return path.endsWith('.csv') ? res.blob() : res.json();
+      }
 
-async function init() {
-  await liff.init({ liffId: LIFF_ID });
-  if (!liff.isLoggedIn()) { liff.login(); return; }
-  token = liff.getIDToken();
-  await load();
-}
+      async function init() {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
+        token = liff.getIDToken();
+        await load();
+      }
 
-async function load() {
-  data = await api('/summary' + (month ? '?month=' + month : ''));
-  month = data.month;
-  $('status').style.display = 'none';
-  render();
-}
+      async function load() {
+        data = await api('/summary' + (month ? '?month=' + month : ''));
+        month = data.month;
+        $('status').style.display = 'none';
+        render();
+      }
 
-function render() {
-  const [y, m] = month.split('-');
-  $('month').textContent = `${y}年${Number(m)}月`;
-  $('next').style.visibility = month >= data.today.slice(0, 7) ? 'hidden' : 'visible';
+      function render() {
+        const [y, m] = month.split('-');
+        $('month').textContent = `${y}年${Number(m)}月`;
+        $('next').style.visibility = month >= data.today.slice(0, 7) ? 'hidden' : 'visible';
 
-  // 収支
-  $('s-expense').textContent = yen(data.expense);
-  $('s-income').textContent = yen(data.income);
-  $('s-balance').textContent = yen(data.income - data.expense);
-  if (data.budget > 0) {
-    const rate = data.expense / data.budget;
-    $('budget-box').style.display = '';
-    $('budget-text').textContent = `予算 ${yen(data.budget)} ／ 残り ${yen(data.budget - data.expense)}（${Math.round(rate * 100)}%使用）`;
-    $('budget-bar').classList.toggle('over', rate > 1);
-    $('budget-bar').firstElementChild.style.width = Math.min(100, rate * 100) + '%';
-  } else {
-    $('budget-box').style.display = 'none';
-  }
+        // 収支
+        $('s-expense').textContent = yen(data.expense);
+        $('s-income').textContent = yen(data.income);
+        $('s-balance').textContent = yen(data.income - data.expense);
+        if (data.budget > 0) {
+          const rate = data.expense / data.budget;
+          $('budget-box').style.display = '';
+          $('budget-text').textContent =
+            `予算 ${yen(data.budget)} ／ 残り ${yen(data.budget - data.expense)}（${Math.round(rate * 100)}%使用）`;
+          $('budget-bar').classList.toggle('over', rate > 1);
+          $('budget-bar').firstElementChild.style.width = Math.min(100, rate * 100) + '%';
+        } else {
+          $('budget-box').style.display = 'none';
+        }
 
-  // 日別
-  drawChart('daily', $('c-daily'), {
-    type: 'bar',
-    data: { labels: data.daily.map((_, i) => i + 1), datasets: [{ data: data.daily, backgroundColor: '#b5523b' }] },
-    options: baseOpts({ x: { ticks: { maxTicksLimit: 8 } } }),
-  });
+        // 日別
+        drawChart('daily', $('c-daily'), {
+          type: 'bar',
+          data: {
+            labels: data.daily.map((_, i) => i + 1),
+            datasets: [{ data: data.daily, backgroundColor: '#b5523b' }],
+          },
+          options: baseOpts({ x: { ticks: { maxTicksLimit: 8 } } }),
+        });
 
-  // カテゴリ別
-  const cats = Object.entries(data.byCategory).sort((a, b) => b[1] - a[1]);
-  drawChart('cat', $('c-cat'), {
-    type: 'doughnut',
-    data: { labels: cats.map((c) => c[0]), datasets: [{ data: cats.map((c) => c[1]), backgroundColor: PALETTE, borderWidth: 1 }] },
-    options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false } } },
-  });
-  $('cat-table').innerHTML = cats.length
-    ? cats.map(([c, v], i) => `<tr><td><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span></td><td>${esc(c)}</td>
-        <td class="num muted">${Math.round((v / data.expense) * 100)}%</td><td class="num">${yen(v)}</td></tr>`).join('')
-    : '<tr><td class="muted">まだ記録がありません</td></tr>';
+        // カテゴリ別
+        const cats = Object.entries(data.byCategory).sort((a, b) => b[1] - a[1]);
+        drawChart('cat', $('c-cat'), {
+          type: 'doughnut',
+          data: {
+            labels: cats.map((c) => c[0]),
+            datasets: [{ data: cats.map((c) => c[1]), backgroundColor: PALETTE, borderWidth: 1 }],
+          },
+          options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false } } },
+        });
+        $('cat-table').innerHTML = cats.length
+          ? cats
+              .map(
+                (
+                  [c, v],
+                  i,
+                ) => `<tr><td><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span></td><td>${esc(c)}</td>
+        <td class="num muted">${Math.round((v / data.expense) * 100)}%</td><td class="num">${yen(v)}</td></tr>`,
+              )
+              .join('')
+          : '<tr><td class="muted">まだ記録がありません</td></tr>';
 
-  // 推移
-  drawChart('trend', $('c-trend'), {
-    type: 'bar',
-    data: {
-      labels: data.trend.map((t) => Number(t.month.slice(5)) + '月'),
-      datasets: [
-        { label: '支出', data: data.trend.map((t) => t.expense), backgroundColor: '#b5523b' },
-        { label: '収入', data: data.trend.map((t) => t.income), backgroundColor: '#2f6b4f' },
-      ],
-    },
-    options: { ...baseOpts(), plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } },
-  });
-  $('trend-table').innerHTML = '<tr class="muted"><td></td><td class="num">支出</td><td class="num">収入</td><td class="num">収支</td></tr>' +
-    data.trend.slice().reverse().map((t) => `<tr><td>${Number(t.month.slice(5))}月</td><td class="num">${yen(t.expense)}</td>
-      <td class="num">${yen(t.income)}</td><td class="num ${t.income - t.expense < 0 ? 'expense' : ''}">${yen(t.income - t.expense)}</td></tr>`).join('');
+        // 推移
+        drawChart('trend', $('c-trend'), {
+          type: 'bar',
+          data: {
+            labels: data.trend.map((t) => Number(t.month.slice(5)) + '月'),
+            datasets: [
+              { label: '支出', data: data.trend.map((t) => t.expense), backgroundColor: '#b5523b' },
+              { label: '収入', data: data.trend.map((t) => t.income), backgroundColor: '#2f6b4f' },
+            ],
+          },
+          options: { ...baseOpts(), plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } },
+        });
+        $('trend-table').innerHTML =
+          '<tr class="muted"><td></td><td class="num">支出</td><td class="num">収入</td><td class="num">収支</td></tr>' +
+          data.trend
+            .slice()
+            .reverse()
+            .map(
+              (t) => `<tr><td>${Number(t.month.slice(5))}月</td><td class="num">${yen(t.expense)}</td>
+      <td class="num">${yen(t.income)}</td><td class="num ${t.income - t.expense < 0 ? 'expense' : ''}">${yen(t.income - t.expense)}</td></tr>`,
+            )
+            .join('');
 
-  renderEntries();
-  renderSettings();
-}
+        renderEntries();
+        renderSettings();
+      }
 
-function renderEntries() {
-  const byDate = {};
-  for (const e of data.entries) (byDate[e.date] ||= []).push(e);
-  const html = Object.keys(byDate).map((d) => {
-    const wd = '日月火水木金土'[new Date(d + 'T00:00:00').getDay()];
-    return `<div class="date-head">${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${wd}）</div>` +
-      byDate[d].map((e) => `<div class="row" onclick="openEdit(${e.id})">
+      function renderEntries() {
+        const byDate = {};
+        for (const e of data.entries) (byDate[e.date] ||= []).push(e);
+        const html = Object.keys(byDate)
+          .map((d) => {
+            const wd = '日月火水木金土'[new Date(d + 'T00:00:00').getDay()];
+            return (
+              `<div class="date-head">${Number(d.slice(5, 7))}/${Number(d.slice(8))}（${wd}）</div>` +
+              byDate[d]
+                .map(
+                  (e) => `<div class="row" onclick="openEdit(${e.id})">
         <div>${esc(e.category)} <span class="meta">${esc([e.store, e.memo].filter(Boolean).join(' '))}${e.source === 'receipt' ? '・レシート' : ''}</span></div>
-        <div class="${e.type}">${e.type === 'income' ? '+' : ''}${yen(e.amount)}</div></div>`).join('');
-  }).join('');
-  $('entries').innerHTML = html || '<p class="muted">この月の記録はありません</p>';
-  fillCatSelect($('a-cat'), $('a-type').value);
-  if (!$('a-date').value) $('a-date').value = data.today;
-}
+        <div class="${e.type}">${e.type === 'income' ? '+' : ''}${yen(e.amount)}</div></div>`,
+                )
+                .join('')
+            );
+          })
+          .join('');
+        $('entries').innerHTML = html || '<p class="muted">この月の記録はありません</p>';
+        fillCatSelect($('a-cat'), $('a-type').value);
+        if (!$('a-date').value) $('a-date').value = data.today;
+      }
 
-function renderSettings() {
-  $('budget-input').value = data.budget || '';
-  for (const type of ['expense', 'income']) {
-    const list = data.categories.filter((c) => c.type === type);
-    $('cats-' + type).innerHTML = list.map((c, i) => `<div class="cat-item">
+      function renderSettings() {
+        $('budget-input').value = data.budget || '';
+        for (const type of ['expense', 'income']) {
+          const list = data.categories.filter((c) => c.type === type);
+          $('cats-' + type).innerHTML = list
+            .map(
+              (c, i) => `<div class="cat-item">
       <span>${esc(c.name)}<br><span class="muted">${esc(c.keywords || '')}</span></span>
       <button onclick="moveCat('${type}', ${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button onclick="moveCat('${type}', ${i}, 1)" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
       <button onclick="editCat(${c.id})">編集</button>
-      <button onclick="delCat(${c.id})">削除</button></div>`).join('');
-  }
-}
+      <button onclick="delCat(${c.id})">削除</button></div>`,
+            )
+            .join('');
+        }
+      }
 
-function fillCatSelect(sel, type, selected) {
-  sel.innerHTML = data.categories.filter((c) => c.type === type)
-    .map((c) => `<option ${c.name === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-}
+      function fillCatSelect(sel, type, selected) {
+        sel.innerHTML = data.categories
+          .filter((c) => c.type === type)
+          .map((c) => `<option ${c.name === selected ? 'selected' : ''}>${esc(c.name)}</option>`)
+          .join('');
+      }
 
-function baseOpts(scales = {}) {
-  return {
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => yen(c.raw) } } },
-    scales: { x: { grid: { display: false }, ...(scales.x || {}) },
-              y: { grid: { color: '#eee' }, ticks: { callback: (v) => v >= 10000 ? v / 10000 + '万' : v } } },
-  };
-}
+      function baseOpts(scales = {}) {
+        return {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => yen(c.raw) } } },
+          scales: {
+            x: { grid: { display: false }, ...(scales.x || {}) },
+            y: { grid: { color: '#eee' }, ticks: { callback: (v) => (v >= 10000 ? v / 10000 + '万' : v) } },
+          },
+        };
+      }
 
-function drawChart(key, canvas, cfg) {
-  if (charts[key]) charts[key].destroy();
-  charts[key] = new Chart(canvas, cfg);
-}
+      function drawChart(key, canvas, cfg) {
+        if (charts[key]) charts[key].destroy();
+        charts[key] = new Chart(canvas, cfg);
+      }
 
-function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+      function esc(s) {
+        return String(s).replace(
+          /[&<>"']/g,
+          (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+        );
+      }
 
-// ----- 操作 -----
-$('prev').onclick = () => { month = shiftMonth(month, -1); load(); };
-$('next').onclick = () => { month = shiftMonth(month, 1); load(); };
-function shiftMonth(m, n) { const [y, mo] = m.split('-').map(Number); const d = new Date(y, mo - 1 + n, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+      // ----- 操作 -----
+      $('prev').onclick = () => {
+        month = shiftMonth(month, -1);
+        load();
+      };
+      $('next').onclick = () => {
+        month = shiftMonth(month, 1);
+        load();
+      };
+      function shiftMonth(m, n) {
+        const [y, mo] = m.split('-').map(Number);
+        const d = new Date(y, mo - 1 + n, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      }
 
-document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
-  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
-  $('monthbar').style.display = b.dataset.tab === 'settings' ? 'none' : '';
-  window.scrollTo(0, 0);
-});
+      document.querySelectorAll('nav button').forEach(
+        (b) =>
+          (b.onclick = () => {
+            document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+            document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+            $('monthbar').style.display = b.dataset.tab === 'settings' ? 'none' : '';
+            window.scrollTo(0, 0);
+          }),
+      );
 
-$('a-type').onchange = () => fillCatSelect($('a-cat'), $('a-type').value);
-$('a-add').onclick = async () => {
-  const amount = Number($('a-amount').value);
-  if (!amount) return alert('金額を入れてください');
-  await api('/entries', { method: 'POST', body: JSON.stringify({
-    type: $('a-type').value, category: $('a-cat').value, amount, date: $('a-date').value, memo: $('a-memo').value }) });
-  $('a-amount').value = ''; $('a-memo').value = '';
-  await load();
-};
+      $('a-type').onchange = () => fillCatSelect($('a-cat'), $('a-type').value);
+      $('a-add').onclick = async () => {
+        const amount = Number($('a-amount').value);
+        if (!amount) return alert('金額を入れてください');
+        await api('/entries', {
+          method: 'POST',
+          body: JSON.stringify({
+            type: $('a-type').value,
+            category: $('a-cat').value,
+            amount,
+            date: $('a-date').value,
+            memo: $('a-memo').value,
+          }),
+        });
+        $('a-amount').value = '';
+        $('a-memo').value = '';
+        await load();
+      };
 
-let editingId = null;
-window.openEdit = (id) => {
-  const e = data.entries.find((x) => x.id === id);
-  editingId = id;
-  $('e-title').textContent = (e.type === 'income' ? '収入' : '支出') + 'を編集' + (e.store ? '（' + e.store + '）' : '');
-  fillCatSelect($('e-cat'), e.type, e.category);
-  $('e-amount').value = e.amount; $('e-date').value = e.date; $('e-memo').value = e.memo;
-  $('edit').showModal();
-};
-$('edit').addEventListener('close', async () => {
-  const v = $('edit').returnValue;
-  if (v === 'save') {
-    await api('/entries/' + editingId, { method: 'PATCH', body: JSON.stringify({
-      category: $('e-cat').value, amount: Number($('e-amount').value), date: $('e-date').value, memo: $('e-memo').value }) });
-    await load();
-  } else if (v === 'delete' && confirm('この記録を削除しますか？')) {
-    await api('/entries/' + editingId, { method: 'DELETE' });
-    await load();
-  }
-});
+      let editingId = null;
+      window.openEdit = (id) => {
+        const e = data.entries.find((x) => x.id === id);
+        editingId = id;
+        $('e-title').textContent =
+          (e.type === 'income' ? '収入' : '支出') + 'を編集' + (e.store ? '（' + e.store + '）' : '');
+        fillCatSelect($('e-cat'), e.type, e.category);
+        $('e-amount').value = e.amount;
+        $('e-date').value = e.date;
+        $('e-memo').value = e.memo;
+        $('edit').showModal();
+      };
+      $('edit').addEventListener('close', async () => {
+        const v = $('edit').returnValue;
+        if (v === 'save') {
+          await api('/entries/' + editingId, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              category: $('e-cat').value,
+              amount: Number($('e-amount').value),
+              date: $('e-date').value,
+              memo: $('e-memo').value,
+            }),
+          });
+          await load();
+        } else if (v === 'delete' && confirm('この記録を削除しますか？')) {
+          await api('/entries/' + editingId, { method: 'DELETE' });
+          await load();
+        }
+      });
 
-$('budget-save').onclick = async () => {
-  await api('/budget', { method: 'PUT', body: JSON.stringify({ amount: Number($('budget-input').value) || 0 }) });
-  await load(); alert('予算を保存しました');
-};
+      $('budget-save').onclick = async () => {
+        await api('/budget', { method: 'PUT', body: JSON.stringify({ amount: Number($('budget-input').value) || 0 }) });
+        await load();
+        alert('予算を保存しました');
+      };
 
-window.moveCat = async (type, i, d) => {
-  const list = data.categories.filter((c) => c.type === type);
-  [list[i], list[i + d]] = [list[i + d], list[i]];
-  await api('/categories/order', { method: 'PUT', body: JSON.stringify({ ids: list.map((c) => c.id) }) });
-  await load();
-};
-window.editCat = async (id) => {
-  const c = data.categories.find((x) => x.id === id);
-  const name = prompt('カテゴリ名', c.name); if (name === null) return;
-  const keywords = prompt('自動判定キーワード（カンマ区切り）', c.keywords); if (keywords === null) return;
-  await api('/categories/' + id, { method: 'PATCH', body: JSON.stringify({ name, keywords }) });
-  await load();
-};
-window.delCat = async (id) => {
-  const c = data.categories.find((x) => x.id === id);
-  if (!confirm(`「${c.name}」を削除しますか？（過去の記録は残ります）`)) return;
-  await api('/categories/' + id, { method: 'DELETE' });
-  await load();
-};
-$('nc-add').onclick = async () => {
-  const name = $('nc-name').value.trim(); if (!name) return;
-  await api('/categories', { method: 'POST', body: JSON.stringify({ name, type: $('nc-type').value, keywords: $('nc-kw').value }) });
-  $('nc-name').value = ''; $('nc-kw').value = '';
-  await load();
-};
+      window.moveCat = async (type, i, d) => {
+        const list = data.categories.filter((c) => c.type === type);
+        [list[i], list[i + d]] = [list[i + d], list[i]];
+        await api('/categories/order', { method: 'PUT', body: JSON.stringify({ ids: list.map((c) => c.id) }) });
+        await load();
+      };
+      window.editCat = async (id) => {
+        const c = data.categories.find((x) => x.id === id);
+        const name = prompt('カテゴリ名', c.name);
+        if (name === null) return;
+        const keywords = prompt('自動判定キーワード（カンマ区切り）', c.keywords);
+        if (keywords === null) return;
+        await api('/categories/' + id, { method: 'PATCH', body: JSON.stringify({ name, keywords }) });
+        await load();
+      };
+      window.delCat = async (id) => {
+        const c = data.categories.find((x) => x.id === id);
+        if (!confirm(`「${c.name}」を削除しますか？（過去の記録は残ります）`)) return;
+        await api('/categories/' + id, { method: 'DELETE' });
+        await load();
+      };
+      $('nc-add').onclick = async () => {
+        const name = $('nc-name').value.trim();
+        if (!name) return;
+        await api('/categories', {
+          method: 'POST',
+          body: JSON.stringify({ name, type: $('nc-type').value, keywords: $('nc-kw').value }),
+        });
+        $('nc-name').value = '';
+        $('nc-kw').value = '';
+        await load();
+      };
 
-$('export').onclick = async () => {
-  const blob = await api('/export.csv');
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'kakeibo.csv'; a.click();
-  URL.revokeObjectURL(url);
-};
+      $('export').onclick = async () => {
+        const blob = await api('/export.csv');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'kakeibo.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+      };
 
-init().catch((e) => { $('status').textContent = '読み込めませんでした：' + e.message; });
-</script>
-</body>
+      init().catch((e) => {
+        $('status').textContent = '読み込めませんでした：' + e.message;
+      });
+    </script>
+  </body>
 </html>

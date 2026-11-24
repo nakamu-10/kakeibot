@@ -9,7 +9,9 @@ if (!token || !liffId) {
   process.exit(1);
 }
 const auth = { Authorization: `Bearer ${token}` };
-const W = 2500, H = 843, cw = Math.floor(W / 3);
+const W = 2500,
+  H = 843,
+  cw = Math.floor(W / 3);
 
 const menu = {
   size: { width: W, height: H },
@@ -40,6 +42,9 @@ const up = await fetch(`https://api-data.line.me/v2/bot/richmenu/${richMenuId}/c
 });
 if (!up.ok) throw new Error('画像アップロード失敗: ' + (await up.text()));
 
-const def = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, { method: 'POST', headers: auth });
+const def = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, {
+  method: 'POST',
+  headers: auth,
+});
 if (!def.ok) throw new Error('デフォルト設定失敗: ' + (await def.text()));
 console.log('リッチメニューを設定しました');

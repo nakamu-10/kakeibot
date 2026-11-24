@@ -41,7 +41,10 @@ describe('extractDate', () => {
 
 describe('parseReceiptJson', () => {
   it('JSONを取り出して整形', () => {
-    const r = parseReceiptJson('```json\n{"is_receipt":true,"store":"セブン","date":"2026-11-24","total":"648","category":"食費","items":[{"name":"おにぎり","price":150}]}\n```', ['食費', 'その他']);
+    const r = parseReceiptJson(
+      '```json\n{"is_receipt":true,"store":"セブン","date":"2026-11-24","total":"648","category":"食費","items":[{"name":"おにぎり","price":150}]}\n```',
+      ['食費', 'その他'],
+    );
     expect(r).toMatchObject({ isReceipt: true, store: 'セブン', total: 648, category: '食費' });
     expect(parseReceiptJson('{"is_receipt": false}', ['食費']).isReceipt).toBe(false);
     expect(parseReceiptJson('{"total": 100, "category": "謎"}', ['食費', 'その他']).category).toBe('その他');
