@@ -1,6 +1,6 @@
 # LINE家計簿ボット
 
-LINEに「ランチ 800」と送るだけで記録できる家計簿ボット。レシートの写真を送るとAI（Claude）が読み取ります。
+LINEに「ランチ 800」と送るだけで記録できる家計簿ボット。レシートの写真を送るとAI（Gemini）が読み取ります。
 Cloudflare Workers + D1 で動き、グラフ・履歴・設定はLIFF画面（LINE内で開くWebページ）で見ます。
 
 ## できること（v0.1）
@@ -40,7 +40,7 @@ npm run db:init                         # テーブル作成
 
 npx wrangler secret put LINE_CHANNEL_SECRET
 npx wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-npx wrangler secret put ANTHROPIC_API_KEY
+npx wrangler secret put GEMINI_API_KEY
 ```
 
 `wrangler.toml` の `LIFF_ID` と `LOGIN_CHANNEL_ID` を書き換えてから：
@@ -75,7 +75,7 @@ src/
   index.ts    ルーティング（/webhook, /app, /api/*）
   bot.ts      LINEイベント処理（テキスト・画像・ポストバック）
   parse.ts    「ランチ 800」の解析、日付指定、初期カテゴリ
-  receipt.ts  レシート画像 → Claude API → JSON
+  receipt.ts  レシート画像 → Gemini API → JSON
   db.ts       D1 アクセス（記録・カテゴリ・予算・集計）
   api.ts      LIFF画面用API（IDトークンで本人確認）
   line.ts     署名検証・返信・画像取得・クイックリプライ
