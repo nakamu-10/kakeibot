@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES, extractDate, parseEntry } from './parse';
-import { extractInteractionText, parseReceiptJson } from './receipt';
+import { extractInteractionText, parseReceiptJson, receiptModels, shouldTryNextModel } from './receipt';
 
 const p = (s: string) => parseEntry(s, DEFAULT_CATEGORIES);
 
@@ -79,5 +79,23 @@ describe('extractInteractionText', () => {
   });
   it('テキストがなければエラー', () => {
     expect(() => extractInteractionText({ status: 'completed', steps: [] })).toThrow('テキスト');
+  });
+});
+
+describe('receiptModels', () => {
+  it('カンマ区切りを試す順に並べる', () => {
+    expect(receiptModels('a, b ,,a')).toEqual(['a', 'b']);
+  });
+  it('未設定なら軽いモデルから試す', () => {
+    expect(receiptModels('')[0]).toBe('gemini-3.5-flash-lite');
+  });
+});
+
+describe('shouldTryNextModel', () => {
+  it('混雑・回数上限・時間切れなら次のモデルへ', () => {
+    expect([503, 500, 429, 408].map(shouldTryNextModel)).toEqual([true, true, true, true]);
+  });
+  it('リクエストの誤りやキーの誤りでは次へ進まない', () => {
+    expect([400, 401, 403, 404].map(shouldTryNextModel)).toEqual([false, false, false, false]);
   });
 });

@@ -3,7 +3,7 @@
 - 日付：2026-11-25
 - 背景：v0.1 は Claude API（Haiku 5.5）で読み取っていた。1枚0.1円程度と安いが、従量課金なので Anthropic Console にクレジットを前払いする必要がある。まずは費用ゼロで動かしたい
 - 決定：
-  - Gemini API の無料枠で読み取る。モデルは `gemini-3.8-flash`（安定版）。`RECEIPT_MODEL` で変えられる
+  - Gemini API の無料枠で読み取る。モデルは `gemini-3.5-flash-lite` を先に試し、混雑・回数上限・時間切れなら `gemini-3.8-flash` で読む。`RECEIPT_MODEL`（カンマ区切り）で変えられる
   - 呼び方は Interactions API（`POST /v1beta/interactions`）。公式が新規開発に勧めている方。`generateContent` は「既存向けのレガシー」とされている
   - SDK は入れず `fetch` で呼ぶ。呼ぶのが1か所だけで、Workers で余計な依存を増やしたくない
   - `response_format` に JSON Schema を渡して JSON で返させる。null を避けるため、読めない日付は空文字で返させる

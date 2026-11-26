@@ -10,8 +10,26 @@ export interface ReceiptResult {
   items: { name: string; price: number }[];
 }
 
-/** 無料枠の回数上限に達したとき。ユーザーに「時間をおいて」と伝えるため区別する */
-export class ReceiptQuotaError extends Error {}
+/** どのモデルも混雑・回数上限で使えなかったとき。ユーザーに「時間をおいて」と伝えるため区別する */
+export class ReceiptUnavailableError extends Error {}
+
+const DEFAULT_MODELS = 'gemini-3.5-flash-lite,gemini-3.8-flash';
+// LINEの返信トークンが切れる前に次のモデルへ移るため
+const TIMEOUT_MS = 25_000;
+
+/** RECEIPT_MODEL（カンマ区切り）を、試す順のモデル名の配列にする */
+export function receiptModels(setting: string | undefined): string[] {
+  const models = (setting || DEFAULT_MODELS)
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+  return [...new Set(models)];
+}
+
+/** 別のモデルなら読めるかもしれない失敗か（混雑・回数上限・時間切れ） */
+export function shouldTryNextModel(status: number): boolean {
+  return status === 429 || status === 408 || status >= 500;
+}
 
 const SUPPORTED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
@@ -35,7 +53,7 @@ const RECEIPT_SCHEMA = {
   required: ['is_receipt', 'store', 'date', 'total', 'category', 'items'],
 };
 
-/** レシート画像をGeminiで読み取る */
+/** レシート画像をGeminiで読み取る。混雑などで失敗したら次のモデルで読む */
 export async function readReceipt(
   env: Env,
   image: ArrayBuffer,
@@ -50,28 +68,43 @@ export async function readReceipt(
 - レシートでない画像なら is_receipt を false にし、ほかは空文字・0・空配列にしてください。
 - items は主なものを最大10件まで。`;
 
-  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-goog-api-key': env.GEMINI_API_KEY,
-      'api-revision': '2026-05-20',
-    },
-    body: JSON.stringify({
-      model: env.RECEIPT_MODEL || 'gemini-3.8-flash',
-      input: [
-        { type: 'text', text: prompt },
-        { type: 'image', data: arrayBufferToBase64(image), mime_type: mimeType },
-      ],
-      // 家計の情報なので、Google側に会話として保存させない
-      store: false,
-      generation_config: { thinking_level: 'low', max_output_tokens: 4096 },
-      response_format: { type: 'text', mime_type: 'application/json', schema: RECEIPT_SCHEMA },
-    }),
-  });
-  if (res.status === 429) throw new ReceiptQuotaError(`Gemini API 429: ${await res.text()}`);
-  if (!res.ok) throw new Error(`Gemini API ${res.status}: ${await res.text()}`);
-  return parseReceiptJson(extractInteractionText(await res.json()), expenseCategories);
+  const input = [
+    { type: 'text', text: prompt },
+    { type: 'image', data: arrayBufferToBase64(image), mime_type: mimeType },
+  ];
+
+  const failures: string[] = [];
+  for (const model of receiptModels(env.RECEIPT_MODEL)) {
+    let res: Response;
+    try {
+      res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-goog-api-key': env.GEMINI_API_KEY,
+          'api-revision': '2026-05-20',
+        },
+        body: JSON.stringify({
+          model,
+          input,
+          // 家計の情報なので、Google側に会話として保存させない
+          store: false,
+          generation_config: { thinking_level: 'low', max_output_tokens: 4096 },
+          response_format: { type: 'text', mime_type: 'application/json', schema: RECEIPT_SCHEMA },
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+    } catch (e) {
+      if (!(e instanceof DOMException && e.name === 'TimeoutError')) throw e;
+      failures.push(`${model}: timeout`);
+      continue;
+    }
+    if (res.ok) return parseReceiptJson(extractInteractionText(await res.json()), expenseCategories);
+    const detail = `${model} ${res.status}: ${await res.text()}`;
+    if (!shouldTryNextModel(res.status)) throw new Error(`Gemini API ${detail}`);
+    failures.push(detail);
+  }
+  throw new ReceiptUnavailableError(`Gemini API: ${failures.join(' / ')}`);
 }
 
 interface Interaction {
