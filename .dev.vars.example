@@ -1,3 +1,11 @@
+# ローカル開発（npm run dev / npm run try:receipt）で使う値
+# このファイルは見本。値は書かずに `.dev.vars` にコピーしてから書く（.dev.vars は git に入らない）
+#   PowerShell: Copy-Item .dev.vars.example .dev.vars
+# 本番には同じ値を `npx wrangler secret put <名前>` で登録する
+
+# LINE Developers → Messaging APIチャネル → 「チャネル基本設定」のチャネルシークレット
 LINE_CHANNEL_SECRET=
+# LINE Developers → Messaging APIチャネル → 「Messaging API設定」のチャネルアクセストークン（長期）
 LINE_CHANNEL_ACCESS_TOKEN=
+# Google AI Studio（https://aistudio.google.com/）で作るAPIキー
 GEMINI_API_KEY=
