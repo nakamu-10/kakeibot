@@ -6,6 +6,7 @@ export interface Env {
   LIFF_ID: string;
   LOGIN_CHANNEL_ID: string;
   RECEIPT_MODEL: string;
+  ICAL_ENCRYPTION_KEY: string;
 }
 
 export type EntryType = 'expense' | 'income';

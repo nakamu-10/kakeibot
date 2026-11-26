@@ -1,5 +1,6 @@
 import type { Category, Entry, EntryType } from './types';
 import { DEFAULT_CATEGORIES } from './parse';
+import { sanitizeJob, type Allowance, type Job } from './shift/calc';
 import { daysInMonth, shiftMonth } from './util';
 
 export class Repo {
@@ -214,4 +215,138 @@ export class Repo {
       income: r.results.find((x) => x.m === m && x.type === 'income')?.total ?? 0,
     }));
   }
+  // ---------- シフト収入 ----------
+  async shiftJobs(userId: string): Promise<StoredJob[]> {
+    const r = await this.db
+      .prepare('SELECT * FROM shift_jobs WHERE user_id = ? ORDER BY sort, id')
+      .bind(userId)
+      .all<ShiftJobRow>();
+    return r.results.map(rowToJob);
+  }
+
+  async allowances(userId: string): Promise<Allowance[]> {
+    const r = await this.db
+      .prepare('SELECT id, name, amount, day FROM allowances WHERE user_id = ? ORDER BY sort, id')
+      .bind(userId)
+      .all<Allowance>();
+    return r.results;
+  }
+
+  async incomeWall(userId: string): Promise<number> {
+    const r = await this.db
+      .prepare('SELECT income_wall FROM shift_settings WHERE user_id = ?')
+      .bind(userId)
+      .first<{ income_wall: number }>();
+    return r?.income_wall ?? 0;
+  }
+
+  /**
+   * シフト収入の設定をまとめて保存する。
+   * jobs にない既存のバイト先は消す。icalUrlEnc が null のバイト先は URL をそのまま残す
+   */
+  async saveShiftSettings(
+    userId: string,
+    jobs: { job: Job; icalUrlEnc: string | null }[],
+    allowances: Allowance[],
+    wall: number,
+  ): Promise<void> {
+    const keep = jobs.map((j) => j.job.id).filter((id) => id > 0);
+    const stmts = [
+      this.db
+        .prepare(`DELETE FROM shift_jobs WHERE user_id = ? AND id NOT IN (SELECT value FROM json_each(?))`)
+        .bind(userId, JSON.stringify(keep)),
+      ...jobs.map(({ job: j, icalUrlEnc }, sort) => {
+        const fields = [
+          j.name,
+          j.weekdayRate,
+          j.weekendRate,
+          j.holidayAsWeekend ? 1 : 0,
+          j.nightEnabled ? 1 : 0,
+          j.nightPremium,
+          JSON.stringify(j.breaks),
+          j.roundUnit,
+          j.transport,
+          j.closingDay,
+          j.payMonthOffset,
+          j.payDay,
+          sort,
+        ];
+        if (j.id > 0) {
+          return this.db
+            .prepare(
+              `UPDATE shift_jobs SET name = ?, weekday_rate = ?, weekend_rate = ?, holiday_as_weekend = ?,
+                 night_enabled = ?, night_premium = ?, breaks = ?, round_unit = ?, transport = ?, closing_day = ?,
+                 pay_month_offset = ?, pay_day = ?, sort = ?, ical_url_enc = COALESCE(?, ical_url_enc)
+               WHERE id = ? AND user_id = ?`,
+            )
+            .bind(...fields, icalUrlEnc, j.id, userId);
+        }
+        return this.db
+          .prepare(
+            `INSERT INTO shift_jobs (name, weekday_rate, weekend_rate, holiday_as_weekend, night_enabled, night_premium,
+               breaks, round_unit, transport, closing_day, pay_month_offset, pay_day, sort, ical_url_enc, user_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(...fields, icalUrlEnc ?? '', userId);
+      }),
+      this.db.prepare('DELETE FROM allowances WHERE user_id = ?').bind(userId),
+      ...allowances.map((a, sort) =>
+        this.db
+          .prepare('INSERT INTO allowances (user_id, name, amount, day, sort) VALUES (?, ?, ?, ?, ?)')
+          .bind(userId, a.name, a.amount, a.day, sort),
+      ),
+      this.db
+        .prepare(
+          `INSERT INTO shift_settings (user_id, income_wall) VALUES (?, ?)
+           ON CONFLICT (user_id) DO UPDATE SET income_wall = excluded.income_wall`,
+        )
+        .bind(userId, wall),
+    ];
+    await this.db.batch(stmts);
+  }
+}
+
+/** D1 に置いたバイト先（URL は暗号化したまま） */
+export type StoredJob = Job & { icalUrlEnc: string };
+
+interface ShiftJobRow {
+  id: number;
+  name: string;
+  ical_url_enc: string;
+  weekday_rate: number;
+  weekend_rate: number;
+  holiday_as_weekend: number;
+  night_enabled: number;
+  night_premium: number;
+  breaks: string;
+  round_unit: number;
+  transport: number;
+  closing_day: number;
+  pay_month_offset: number;
+  pay_day: number;
+}
+
+function rowToJob(r: ShiftJobRow): StoredJob {
+  let breaks: unknown = [];
+  try {
+    breaks = JSON.parse(r.breaks);
+  } catch {
+    // 壊れていたら休憩なしとして読む
+  }
+  const job = sanitizeJob({
+    id: r.id,
+    name: r.name,
+    weekdayRate: r.weekday_rate,
+    weekendRate: r.weekend_rate,
+    holidayAsWeekend: r.holiday_as_weekend === 1,
+    nightEnabled: r.night_enabled === 1,
+    nightPremium: r.night_premium,
+    breaks,
+    roundUnit: r.round_unit,
+    transport: r.transport,
+    closingDay: r.closing_day,
+    payMonthOffset: r.pay_month_offset,
+    payDay: r.pay_day,
+  });
+  return { ...job, icalUrlEnc: r.ical_url_enc };
 }
