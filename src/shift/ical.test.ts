@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { jstMidnight } from './calc';
-import { dropEventsOutside, parseShifts, rangeForYear } from './ical';
+import { parseShifts, rangeForYear, readSimpleEvent, trimToRange } from './ical';
 
 // Google カレンダーの非公開iCalに似せた架空のデータ
 const ICS = [
@@ -85,17 +85,81 @@ describe('parseShifts', () => {
   });
 });
 
-describe('dropEventsOutside', () => {
+describe('trimToRange', () => {
   it('繰り返しのない期間外の予定だけを先に落とす', () => {
-    const out = dropEventsOutside(ICS, rangeForYear(2026));
+    const out = trimToRange(ICS, rangeForYear(2026));
     expect(out).not.toContain('old@example.com');
     expect(out).toContain('weekly@example.com');
     expect(out).toContain('single@example.com');
+  });
+
+  /** 2022-01-05（水）17:00-20:00 から始まる繰り返し */
+  const series = (rrule: string) =>
+    [
+      'BEGIN:VCALENDAR',
+      'BEGIN:VEVENT',
+      'DTSTART;TZID=Asia/Tokyo:20220105T170000',
+      'DTEND;TZID=Asia/Tokyo:20220105T200000',
+      `RRULE:${rrule}`,
+      'UID:old-series@example.com',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+  /** 2022-01-05 から every 日ごとの、期間内の開始時刻 */
+  const expected = (every: number) => {
+    const range = rangeForYear(2026);
+    const out: number[] = [];
+    for (let t = jst(2022, 1, 5, 17); t < range.to; t += every * 86_400_000) if (t >= range.from) out.push(t);
+    return out;
+  };
+
+  it('昔から続く毎週の繰り返しを進めても、期間内の回は同じ', () => {
+    expect(trimToRange(series('FREQ=WEEKLY'), rangeForYear(2026))).not.toContain('20220105');
+    expect(parseShifts(series('FREQ=WEEKLY'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(expected(7));
+  });
+  it('隔週や毎日でも周期がずれない', () => {
+    expect(parseShifts(series('FREQ=WEEKLY;INTERVAL=2;BYDAY=WE'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(
+      expected(14),
+    );
+    expect(parseShifts(series('FREQ=DAILY;INTERVAL=3'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(
+      expected(3),
+    );
+  });
+  it('期間より前に終わった繰り返しは落とし、回数指定はそのまま', () => {
+    expect(trimToRange(series('FREQ=WEEKLY;UNTIL=20230101T000000Z'), rangeForYear(2026))).not.toContain('VEVENT');
+    expect(trimToRange(series('FREQ=WEEKLY;COUNT=500'), rangeForYear(2026))).toContain('20220105');
   });
 });
 
 describe('rangeForYear', () => {
   it('前年9月1日から年末まで（日本時間）', () => {
     expect(rangeForYear(2026)).toEqual({ from: jstMidnight(2025, 9, 1), to: jstMidnight(2027, 1, 1) });
+  });
+});
+
+describe('readSimpleEvent', () => {
+  it('折り返し・エスケープされた説明欄を読む', () => {
+    const block = [
+      'BEGIN:VEVENT',
+      'DTSTART:20261101T090000',
+      'DTEND:20261101T120000',
+      'DESCRIPTION:メモ\\, 早番\\n休',
+      ' 憩30',
+      'END:VEVENT',
+    ].join('\r\n');
+    expect(readSimpleEvent(block)).toEqual({
+      start: jst(2026, 11, 1, 9),
+      end: jst(2026, 11, 1, 12),
+      description: 'メモ, 早番\n休憩30',
+    });
+  });
+  it('日本時間・UTC 以外のタイムゾーンは ical.js に任せる', () => {
+    const block = [
+      'BEGIN:VEVENT',
+      'DTSTART;TZID=America/New_York:20261101T090000',
+      'DTEND;TZID=America/New_York:20261101T120000',
+      'END:VEVENT',
+    ].join('\r\n');
+    expect(readSimpleEvent(block)).toBeUndefined();
   });
 });
