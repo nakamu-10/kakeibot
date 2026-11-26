@@ -3,6 +3,7 @@ import { verifySignature } from './line';
 import { handleEvent } from './bot';
 import { handleApi } from './api';
 import appHtml from './app.html';
+import shiftHtml from './shift.html';
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -31,6 +32,13 @@ export default {
     // LIFF画面
     if (url.pathname === '/' || url.pathname === '/app') {
       return new Response(appHtml.replace('__LIFF_ID__', env.LIFF_ID), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
+
+    // シフト収入のページ。LIFF のエンドポイント /app の下に置き、liff.line.me/<LIFF ID>/shift で開けるようにする
+    if (url.pathname === '/app/shift') {
+      return new Response(shiftHtml.replace('__LIFF_ID__', env.LIFF_ID), {
         headers: { 'content-type': 'text/html; charset=utf-8' },
       });
     }

@@ -14,6 +14,7 @@ Cloudflare Workers + D1 で動き、グラフ・履歴・設定はLIFF画面（L
 | 記録後の操作 | クイックリプライで「取り消す」「カテゴリ変更」「今月」「レシート撮影」「グラフ」                                                                       |
 | コマンド     | 今月 / 先月 / 予算 50000 / 予算 / 取り消し / カテゴリ / グラフ / ヘルプ                                                                                |
 | LIFF画面     | 月の収支・予算残り、日別グラフ、カテゴリ別グラフ、6か月推移、月比較、履歴の追加・編集・削除、予算設定、カテゴリ追加・編集・並び替え・削除、CSV書き出し |
+| シフト収入   | Google カレンダーのシフトから、給料日ごとの入金予定・月の勤務・年間の支給額を計算（LIFF の `/app/shift`）                                              |
 
 カテゴリの自動判定はカテゴリごとの「キーワード」で行います（例：食費 ← ランチ, コンビニ, スタバ…）。設定画面から自由に編集できます。
 
@@ -69,6 +70,31 @@ npm run deploy
 LINE_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=yyy npm run richmenu
 ```
 
+## シフト収入
+
+バイトのシフトを Google カレンダー（バイト先ごとに1つ）に入れておくと、時給・深夜手当・休憩・締め日・給料日から収入を計算します。家計簿の「設定」→「シフト収入を開く」、または `https://liff.line.me/<LIFF ID>/shift` で開きます。
+
+- 予定の説明欄に「休憩60」「休憩:30」と書くと、その回だけ休憩の分数を変えられます
+- 終日の予定は数えません。祝日は [holidays-jp](https://holidays-jp.github.io/) から取ります
+
+### 使い始めるとき（1回だけ）
+
+カレンダーの非公開URLは暗号化して保存します。その鍵を作って登録し、既存のDBにテーブルを足します。
+
+```powershell
+# 鍵を作る（表示された文字列を次のコマンドで貼る。ほかの人に見せない・どこにも保存しない）
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+npx wrangler secret put ICAL_ENCRYPTION_KEY
+npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
+npm run deploy
+```
+
+鍵を作り直すと、登録済みのカレンダーURLが読めなくなります。そのときは設定画面でURLを貼り直してください。
+
+### カレンダーのURL
+
+パソコンの Google カレンダーで「設定」→ 左の一覧でバイト先のカレンダー →「カレンダーの統合」にある「iCal 形式の非公開アドレス」を、シフト収入の設定画面に貼ります。このURLを知っている人は誰でも予定を読めるので、ほかの人に見せたりコミットしたりしないでください。漏れたときは、同じ画面の「リセット」でURLを変えられます。
+
 ## ローカル開発
 
 ```bash
@@ -91,6 +117,9 @@ src/
   api.ts      LIFF画面用API（IDトークンで本人確認）
   line.ts     署名検証・返信・画像取得・クイックリプライ
   app.html    LIFF画面（Chart.js）
+  shift.html  シフト収入のLIFF画面
+  shift/      シフト収入（計算・iCal読み込み・URLの暗号化・祝日・API）
+migrations/ 既存DB向けの移行SQL
 schema.sql    テーブル定義
 scripts/      リッチメニュー作成スクリプトと画像
 ```

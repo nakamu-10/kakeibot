@@ -1,12 +1,10 @@
 import type { Env, EntryType } from './types';
 import { Repo } from './db';
 import { verifyIdToken } from './line';
-import { monthOf, todayJST } from './util';
+import { json, monthOf, todayJST } from './util';
+import { handleShiftApi } from './shift/api';
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
-
-const json = (data: unknown, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
 /** LIFF画面から呼ばれるAPI（/api/...） */
 export async function handleApi(req: Request, env: Env, url: URL): Promise<Response> {
@@ -125,6 +123,8 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       },
     });
   }
+
+  if (path.startsWith('/shift/')) return handleShiftApi(env, repo, userId, method, path, body, url);
 
   return json({ error: 'not found' }, 404);
 }
