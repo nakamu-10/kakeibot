@@ -1,7 +1,7 @@
 import type { Env, Entry } from './types';
 import { Repo } from './db';
 import { extractDate, parseEntry } from './parse';
-import { readReceipt } from './receipt';
+import { ReceiptUnavailableError, readReceipt } from './receipt';
 import { getContent, qrCamera, qrMessage, qrPostback, qrUri, reply, showLoading, text, type LineMessage } from './line';
 import { monthOf, normalize, shiftMonth, todayJST, yen } from './util';
 
@@ -152,6 +152,13 @@ async function handleImage(ctx: Ctx, messageId: string): Promise<void> {
     await replyRecorded(ctx, entry, 'レシートを読み取りました ✓');
   } catch (e) {
     console.error(e);
+    if (e instanceof ReceiptUnavailableError) {
+      return reply(env, replyToken, [
+        text(
+          'レシート読み取りが混み合っているか、利用回数の上限に達しています。時間をおいて送るか、「ランチ 800」のように文字で記録してください。',
+        ),
+      ]);
+    }
     return reply(env, replyToken, [text('読み取り中にエラーが起きました。少し待ってからもう一度送ってください。')]);
   }
 }

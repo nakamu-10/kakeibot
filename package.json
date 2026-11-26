@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "try:receipt": "vitest run scripts/receipt.live.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20260702.1",

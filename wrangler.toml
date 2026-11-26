@@ -11,14 +11,15 @@ fallthrough = true
 [[d1_databases]]
 binding = "DB"
 database_name = "kakeibo"
-database_id = "ここに wrangler d1 create kakeibo で出たIDを貼る"
+database_id = "834047d8-bd46-47a4-843a-a2223f6a2350"
 
 [vars]
-LIFF_ID = "ここにLIFF IDを貼る"
-LOGIN_CHANNEL_ID = "ここにLINEログインチャネルのチャネルIDを貼る"
-RECEIPT_MODEL = "claude-haiku-5-5"
+LIFF_ID = "2012810933-rTm4Ah4U"
+LOGIN_CHANNEL_ID = "2012810933"
+# 左から順に試し、混雑・回数上限・時間切れなら次のモデルで読む
+RECEIPT_MODEL = "gemini-3.5-flash-lite,gemini-3.8-flash"
 
 # シークレットは以下で登録（tomlには書かない）
 # wrangler secret put LINE_CHANNEL_SECRET
 # wrangler secret put LINE_CHANNEL_ACCESS_TOKEN
-# wrangler secret put ANTHROPIC_API_KEY
+# wrangler secret put GEMINI_API_KEY  (Google AI Studio で作るキー。無料枠)

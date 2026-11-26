@@ -2,7 +2,7 @@ export interface Env {
   DB: D1Database;
   LINE_CHANNEL_SECRET: string;
   LINE_CHANNEL_ACCESS_TOKEN: string;
-  ANTHROPIC_API_KEY: string;
+  GEMINI_API_KEY: string;
   LIFF_ID: string;
   LOGIN_CHANNEL_ID: string;
   RECEIPT_MODEL: string;

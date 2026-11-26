@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CATEGORIES, extractDate, parseEntry } from './parse';
-import { parseReceiptJson } from './receipt';
+import { extractInteractionText, parseReceiptJson, receiptModels, shouldTryNextModel } from './receipt';
 
 const p = (s: string) => parseEntry(s, DEFAULT_CATEGORIES);
 
@@ -48,5 +48,54 @@ describe('parseReceiptJson', () => {
     expect(r).toMatchObject({ isReceipt: true, store: 'セブン', total: 648, category: '食費' });
     expect(parseReceiptJson('{"is_receipt": false}', ['食費']).isReceipt).toBe(false);
     expect(parseReceiptJson('{"total": 100, "category": "謎"}', ['食費', 'その他']).category).toBe('その他');
+  });
+  it('読めない日付（空文字）は null にする', () => {
+    const r = parseReceiptJson('{"is_receipt":true,"store":"","date":"","total":500,"category":"食費","items":[]}', [
+      '食費',
+    ]);
+    expect(r).toMatchObject({ isReceipt: true, date: null, total: 500 });
+  });
+});
+
+describe('extractInteractionText', () => {
+  it('model_output のテキストをつなげて返す', () => {
+    const json = {
+      status: 'completed',
+      steps: [
+        { type: 'user_input', content: [{ type: 'text', text: '無視される' }] },
+        {
+          type: 'model_output',
+          content: [
+            { type: 'text', text: '{"is_receipt":' },
+            { type: 'text', text: 'false}' },
+          ],
+        },
+      ],
+    };
+    expect(extractInteractionText(json)).toBe('{"is_receipt":false}');
+  });
+  it('completed でなければエラー', () => {
+    expect(() => extractInteractionText({ status: 'incomplete', steps: [] })).toThrow('incomplete');
+  });
+  it('テキストがなければエラー', () => {
+    expect(() => extractInteractionText({ status: 'completed', steps: [] })).toThrow('テキスト');
+  });
+});
+
+describe('receiptModels', () => {
+  it('カンマ区切りを試す順に並べる', () => {
+    expect(receiptModels('a, b ,,a')).toEqual(['a', 'b']);
+  });
+  it('未設定なら軽いモデルから試す', () => {
+    expect(receiptModels('')[0]).toBe('gemini-3.5-flash-lite');
+  });
+});
+
+describe('shouldTryNextModel', () => {
+  it('混雑・回数上限・時間切れなら次のモデルへ', () => {
+    expect([503, 500, 429, 408].map(shouldTryNextModel)).toEqual([true, true, true, true]);
+  });
+  it('リクエストの誤りやキーの誤りでは次へ進まない', () => {
+    expect([400, 401, 403, 404].map(shouldTryNextModel)).toEqual([false, false, false, false]);
   });
 });

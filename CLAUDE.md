@@ -1,7 +1,7 @@
 # LINE家計簿ボット
 
 LINEに「ランチ 800」と送るかレシートの写真を送ると記録できる家計簿ボット。グラフ・履歴・設定はLIFF画面で見る。
-Cloudflare Workers + D1 + TypeScript。レシート読取は Claude API（Messages API の画像入力）。
+Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Interactions API の画像入力、無料枠）。
 
 ## コマンド
 
@@ -16,7 +16,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Claude API（Messag
 - `src/index.ts`：ルーティング（`/webhook`、`/app`、`/api/*`）
 - `src/bot.ts`：LINEイベント処理（テキスト・画像・ポストバック）と返信文
 - `src/parse.ts`：「ランチ 800」の解析、日付指定、初期カテゴリとキーワード
-- `src/receipt.ts`：レシート画像 → Claude → JSON
+- `src/receipt.ts`：レシート画像 → Gemini → JSON
 - `src/db.ts`：D1へのアクセスはすべて `Repo` を通す
 - `src/api.ts`：LIFF画面用API。`Authorization: Bearer <LIFFのIDトークン>` を `verifyIdToken` で検証して userId を得る
 - `src/line.ts`：署名検証・返信・画像取得・クイックリプライ
@@ -37,7 +37,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Claude API（Messag
 
 ## この環境での確かめ方
 
-- LINEやAnthropicのAPIには外から届かないことがある。返信や画像取得が失敗しても、DBへの書き込みと `npm test` で確かめる
+- LINEやGeminiのAPIには外から届かないことがある。返信や画像取得が失敗しても、DBへの書き込みと `npm test` で確かめる
 - 実機の確認（LINEでの返信、LIFF画面）はユーザーがする。PRの「どう確かめたか」に、手で確かめてほしい点を書く
 
 ## commit
