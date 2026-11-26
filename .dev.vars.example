@@ -9,3 +9,5 @@ LINE_CHANNEL_SECRET=
 LINE_CHANNEL_ACCESS_TOKEN=
 # Google AI Studio（https://aistudio.google.com/）で作るAPIキー
 GEMINI_API_KEY=
+# シフト収入のカレンダーURLを暗号化する鍵（32バイトを base64 にしたもの）。作り方は README の「シフト収入」
+ICAL_ENCRYPTION_KEY=
