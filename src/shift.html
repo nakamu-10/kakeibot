@@ -264,7 +264,7 @@
           <p class="muted">
             カレンダーのURLは、パソコンの Google カレンダーで「設定」→ 左の一覧でバイト先のカレンダー
             →「カレンダーの統合」にある「iCal
-            形式の非公開URL」です。このURLを知っている人は誰でも予定を読めるので、ほかの人には見せないでください。
+            形式の非公開アドレス」です。このURLを知っている人は誰でも予定を読めるので、ほかの人には見せないでください。
           </p>
         </section>
         <section>
@@ -464,7 +464,7 @@
           .join('');
         return `<div class="job form" data-job="${i}">
           <div class="full"><label>名前</label><input data-f="name" value="${esc(j.name)}" placeholder="例: 珈琲館" /></div>
-          <div class="full"><label>カレンダーのURL（iCal 形式の非公開URL）</label>
+          <div class="full"><label>カレンダーのURL（iCal 形式の非公開アドレス）</label>
             <input data-f="icalUrl" type="password" autocomplete="off"
               placeholder="${j.hasIcal ? '登録済み（変えるときだけ貼る）' : 'https://calendar.google.com/calendar/ical/…/basic.ics'}" /></div>
           <div><label>平日の時給</label><input data-f="weekdayRate" type="number" inputmode="numeric" value="${j.weekdayRate || ''}" /></div>

@@ -31,7 +31,7 @@ export async function handleShiftApi(
       const icalUrl =
         typeof (raw as { icalUrl?: unknown }).icalUrl === 'string' ? (raw as { icalUrl: string }).icalUrl.trim() : '';
       if (icalUrl && !isGoogleIcalUrl(icalUrl)) {
-        return json({ error: `${job.name}：Google カレンダーの「iCal 形式の非公開URL」を貼ってください` }, 400);
+        return json({ error: `${job.name}：Google カレンダーの「iCal 形式の非公開アドレス」を貼ってください` }, 400);
       }
       if (icalUrl && !env.ICAL_ENCRYPTION_KEY) {
         return json({ error: 'サーバーに ICAL_ENCRYPTION_KEY が設定されていません' }, 500);
