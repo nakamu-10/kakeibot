@@ -20,6 +20,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/db.ts`：D1へのアクセスはすべて `Repo` を通す
 - `src/api.ts`：LIFF画面用API。`Authorization: Bearer <LIFFのIDトークン>` を `verifyIdToken` で検証して userId を得る
 - `src/line.ts`：署名検証・返信・画像取得・クイックリプライ
+- `src/shift/calc.ts`：シフトから給料・入金予定を計算する（純粋関数。時刻は日本時間固定）
 - `src/app.html`：LIFF画面（素のJS + Chart.js、1ファイル）
 - `schema.sql`：テーブル定義。変えたら既存DB向けの移行SQLも `migrations/` に置く
 
