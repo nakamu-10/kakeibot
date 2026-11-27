@@ -32,6 +32,10 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
   - `text.ts`：トークの返信文と通知文。`payday.ts`：給料日・仕送りの日に家計簿へ記録し、通知する（Cron Trigger、毎朝8時）
   - `api.ts`：`/api/shift/*`。`holidays.ts`：祝日（holidays-jp）
 - `src/shift.html`：シフト収入のLIFF画面（`/app/shift`）
+- `mcp/`：外の AI（Claude・Gemini・Muse）向けの MCP サーバー。ボットとは別の Worker（`mcp/wrangler.toml`、`npm run dev:mcp`）
+  - `index.ts`：OAuth の認証サーバーと `/mcp` を兼ねる（`OAuthProvider`）。`auth.ts`：許可の画面と LINE ログイン。`consent.ts`：画面と PKCE（Node で試せる）
+  - `tools.ts`：MCP のツール。D1 は `Repo` を通し、集計やシフト計算は `src/` のものを使う。`scopes.ts`：AI に許すこと
+  - ツールを足すときは、読み取りか書き込みかでスコープと `annotations`（`readOnlyHint`・`destructiveHint`）を付ける
 - `src/app.html`：LIFF画面（素のJS + Chart.js、1ファイル）
 - `src/ui.css`：LIFF画面で共通の見た目（色・カード・ボタン・入力欄・ナビ）。`/app/ui.css` で配る
 - `schema.sql`：テーブル定義。変えたら既存DB向けの移行SQLも `migrations/` に置く
