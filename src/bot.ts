@@ -1,6 +1,6 @@
-import type { Env, Entry } from './types';
+import type { Category, Env, Entry } from './types';
 import { Repo } from './db';
-import { extractDate, parseAmountOnly, parseEntry } from './parse';
+import { extractDate, parseAmountOnly, parseEntry, parseLines } from './parse';
 import { ReceiptUnavailableError, readReceipt } from './receipt';
 import {
   getContent,
@@ -30,6 +30,7 @@ const HELP = `使い方
 ・「ランチ 800」のように送ると支出を記録
 ・「+給料 50000」または「収入 バイト 30000」で収入を記録
 ・「昨日 スーパー 2480」「11/20 本 1200」で日付指定
+・改行して何行か送ると、まとめて記録
 ・レシートの写真を送るとAIが読み取って記録
 
 コマンド
@@ -132,8 +133,9 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   }
 
   // 記録
-  const { date, rest } = extractDate(t, today);
   const cats = await repo.categories(userId);
+  if (t.includes('\n')) return recordLines(ctx, t, cats, today);
+  const { date, rest } = extractDate(t, today);
   const parsed = parseEntry(rest, cats);
   if (!parsed) {
     return reply(env, replyToken, [
@@ -199,6 +201,17 @@ async function handlePostback(ctx: Ctx, data: string): Promise<void> {
   const action = p.get('action');
 
   if (action === 'summary') return replySummary(ctx, monthOf(todayJST()));
+  if (action === 'undoall') {
+    const ids = (p.get('ids') ?? '')
+      .split(',')
+      .map(Number)
+      .filter((n) => n > 0);
+    let deleted = 0;
+    for (const i of ids) if (await repo.deleteEntry(userId, i)) deleted++;
+    return reply(env, replyToken, [
+      text(deleted ? `${deleted}件取り消しました。` : '取り消せる記録がありませんでした（削除済みかもしれません）。'),
+    ]);
+  }
 
   const entry = id ? await repo.getEntry(userId, id) : null;
   if (!entry) return reply(env, replyToken, [text('その記録は見つかりませんでした（削除済みかもしれません）。')]);
@@ -232,6 +245,40 @@ async function handlePostback(ctx: Ctx, data: string): Promise<void> {
     const updated = await repo.mustGetEntry(userId, id);
     return replyRecorded(ctx, updated, 'カテゴリを変更しました ✓');
   }
+}
+
+/** 改行で区切った複数の記録をまとめて記録する */
+async function recordLines(ctx: Ctx, input: string, cats: Category[], today: string): Promise<void> {
+  const { env, repo, userId, replyToken } = ctx;
+  const { entries, failed } = parseLines(input, cats, today);
+  if (!entries.length) {
+    return reply(env, replyToken, [
+      text('うまく読み取れませんでした。1行に1件ずつ「ランチ 800」のように送ってください。'),
+    ]);
+  }
+  const ids: number[] = [];
+  for (const e of entries) ids.push(await repo.addEntry(userId, { ...e, source: 'text' }));
+  if (ids.length === 1 && !failed.length) return replyRecorded(ctx, await repo.mustGetEntry(userId, ids[0]));
+
+  const month = monthOf(today);
+  const s = await repo.monthSummary(userId, month);
+  const budget = await repo.budget(userId);
+  const recorded = s.entries.filter((e) => ids.includes(e.id)).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+  // 先月以前の日付の記録は今月の集計に入らないので、別に読む
+  for (const id of ids) {
+    if (!recorded.some((e) => e.id === id)) recorded.push(await repo.mustGetEntry(userId, id));
+  }
+  const lines = [`${ids.length}件記録しました ✓`, ...recorded.map(describe)];
+  if (failed.length) lines.push('', '読み取れなかった行', ...failed.map((f) => `・${f}`));
+  lines.push('', `今月の支出 ${yen(s.expense)}`);
+  if (budget) lines.push(`予算残り ${yen(budget - s.expense)}`);
+  await reply(env, replyToken, [
+    text(lines.join('\n'), [
+      qrPostback('まとめて取り消す', `action=undoall&ids=${ids.join(',')}`, 'まとめて取り消す'),
+      qrMessage('今月'),
+      qrUri('グラフ', liffUrl(env)),
+    ]),
+  ]);
 }
 
 // ---------------- 返信の組み立て ----------------
