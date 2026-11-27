@@ -17,6 +17,8 @@ interface BreakRule {
 export interface Job {
   id: number;
   name: string;
+  /** 予定のタイトルでこのバイト先と判定する言葉（カンマ区切り）。空なら name */
+  keywords: string;
   weekdayRate: number;
   /** 0なら平日と同じ */
   weekendRate: number;
@@ -124,6 +126,7 @@ export function sanitizeJob(input: unknown): Job {
   return {
     id: num(j.id, 0),
     name: (typeof j.name === 'string' ? j.name.trim() : '') || 'バイト先',
+    keywords: typeof j.keywords === 'string' ? j.keywords.trim() : '',
     weekdayRate: Math.max(0, num(j.weekdayRate, 0)),
     weekendRate: Math.max(0, num(j.weekendRate, 0)),
     holidayAsWeekend: !!j.holidayAsWeekend,

@@ -246,6 +246,7 @@
         <section>
           <h2>シフト一覧</h2>
           <table id="shifts"></table>
+          <p class="muted" id="unmatched"></p>
         </section>
         <section>
           <h2 id="year-title">この年に支給される給与</h2>
@@ -258,14 +259,19 @@
       <!-- 設定 -->
       <div class="tab" id="tab-settings">
         <section>
+          <h2>シフトのカレンダー</h2>
+          <input id="ical-url" type="password" autocomplete="off" />
+          <p class="muted">
+            シフトはひとつの Google カレンダーにまとめて入れ、予定のタイトルにバイト先の名前を書きます（例：「珈琲館
+            早番」）。貼るのは、パソコンの Google カレンダーで「設定」→ 左の一覧でそのカレンダー
+            →「カレンダーの統合」にある「iCal
+            形式の非公開アドレス」です。このアドレスを知っている人は誰でも予定を読めるので、ほかの人には見せないでください。
+          </p>
+        </section>
+        <section>
           <h2>バイト先</h2>
           <div id="jobs"></div>
           <button class="btn ghost" id="add-job" style="margin-top: 12px">バイト先を追加</button>
-          <p class="muted">
-            カレンダーのURLは、パソコンの Google カレンダーで「設定」→ 左の一覧でバイト先のカレンダー
-            →「カレンダーの統合」にある「iCal
-            形式の非公開アドレス」です。このURLを知っている人は誰でも予定を読めるので、ほかの人には見せないでください。
-          </p>
         </section>
         <section>
           <h2>毎月決まった収入（仕送りなど）</h2>
@@ -357,7 +363,7 @@
         $('month').textContent = `${r.year}年${r.month}月`;
         $('errors').innerHTML = r.errors.map((e) => `<div>${esc(e)}</div>`).join('');
         if (!r.hasJobs) {
-          $('errors').innerHTML = '<div>「設定」でバイト先とカレンダーのURLを登録してください。</div>';
+          $('errors').innerHTML = '<div>「設定」でシフトのカレンダーとバイト先を登録してください。</div>';
         }
 
         $('incoming').innerHTML =
@@ -382,6 +388,11 @@
             .join('') +
           `<tr class="total"><td>合計</td><td></td><td class="num">${hm(r.workMinTotal)}</td><td class="num">${yen(r.workPayTotal)}</td></tr>`;
 
+        $('unmatched').textContent = r.unmatchedTitles.length
+          ? 'どのバイト先にも当てはまらなかった予定：' +
+            r.unmatchedTitles.join('、') +
+            '（バイトの予定なら、タイトルにバイト先の名前を入れるか、設定の「タイトルに含まれる言葉」に足してください）'
+          : '';
         $('shifts').innerHTML = r.shifts.length
           ? r.shifts
               .map((s) => {
@@ -422,7 +433,7 @@
         return {
           id: 0,
           name: '',
-          hasIcal: false,
+          keywords: '',
           weekdayRate: 0,
           weekendRate: 0,
           holidayAsWeekend: false,
@@ -451,6 +462,10 @@
           )
           .join('');
         $('wall').value = settings.wall || '';
+        $('ical-url').value = '';
+        $('ical-url').placeholder = settings.hasIcal
+          ? '登録済み（変えるときだけ貼る）'
+          : 'https://calendar.google.com/calendar/ical/…/basic.ics';
       }
 
       function jobForm(j, i) {
@@ -464,9 +479,8 @@
           .join('');
         return `<div class="job form" data-job="${i}">
           <div class="full"><label>名前</label><input data-f="name" value="${esc(j.name)}" placeholder="例: 珈琲館" /></div>
-          <div class="full"><label>カレンダーのURL（iCal 形式の非公開アドレス）</label>
-            <input data-f="icalUrl" type="password" autocomplete="off"
-              placeholder="${j.hasIcal ? '登録済み（変えるときだけ貼る）' : 'https://calendar.google.com/calendar/ical/…/basic.ics'}" /></div>
+          <div class="full"><label>予定のタイトルに含まれる言葉（カンマ区切り。空ならバイト先の名前）</label>
+            <input data-f="keywords" value="${esc(j.keywords)}" placeholder="例: 珈琲館, コーヒー" /></div>
           <div><label>平日の時給</label><input data-f="weekdayRate" type="number" inputmode="numeric" value="${j.weekdayRate || ''}" /></div>
           <div><label>土日の時給（空なら平日と同じ）</label><input data-f="weekendRate" type="number" inputmode="numeric" value="${j.weekendRate || ''}" /></div>
           <label class="check full"><input data-f="holidayAsWeekend" type="checkbox" ${j.holidayAsWeekend ? 'checked' : ''} />祝日も土日の時給にする</label>
@@ -492,7 +506,7 @@
           const j = settings.jobs[Number(el.dataset.job)];
           Object.assign(j, {
             name: val(el, 'name').value,
-            icalUrl: val(el, 'icalUrl').value,
+            keywords: val(el, 'keywords').value,
             weekdayRate: num(el, 'weekdayRate'),
             weekendRate: num(el, 'weekendRate'),
             holidayAsWeekend: val(el, 'holidayAsWeekend').checked,
@@ -515,6 +529,7 @@
           day: num(el, 'day'),
         }));
         settings.wall = Number($('wall').value) || 0;
+        settings.icalUrl = $('ical-url').value;
       }
 
       // 行の追加・削除は、入力中の値を残したまま描き直す
