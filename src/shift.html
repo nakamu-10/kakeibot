@@ -4,299 +4,283 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>シフト収入</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/app/ui.css" />
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
-      :root {
-        --ink: #1f2328;
-        --sub: #6a737d;
-        --line: #e3e5e8;
-        --bg: #fafaf8;
-        --accent: #2f6b4f;
-        --warn: #b5523b;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family: -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
-        color: var(--ink);
-        background: var(--bg);
+      .notice {
+        background: var(--red-soft);
+        color: var(--red);
+        border-radius: var(--radius-sm);
+        padding: 12px 16px;
+        margin-bottom: 12px;
         font-size: 15px;
-        line-height: 1.6;
-        padding-bottom: calc(64px + env(safe-area-inset-bottom));
       }
-      header {
-        position: sticky;
-        top: 0;
-        background: var(--bg);
-        border-bottom: 1px solid var(--line);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        padding: 10px;
-        z-index: 5;
-      }
-      header button {
-        background: none;
-        border: none;
-        font-size: 20px;
-        color: var(--sub);
-        padding: 0 8px;
-      }
-      header h1 {
-        font-size: 16px;
-        font-weight: 600;
-        margin: 0;
-        min-width: 120px;
-        text-align: center;
-      }
-      main {
-        max-width: 640px;
-        margin: 0 auto;
-        padding: 0 16px;
-      }
-      section {
-        padding: 18px 0;
-        border-bottom: 1px solid var(--line);
-      }
-      h2 {
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--sub);
-        margin: 0 0 10px;
-        letter-spacing: 0.04em;
-      }
-      h3 {
-        font-size: 14px;
-        font-weight: 600;
-        margin: 0 0 8px;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      th {
-        font-size: 12px;
-        font-weight: normal;
-        color: var(--sub);
-        text-align: left;
-        padding: 4px 0;
-        border-bottom: 1px solid var(--line);
-      }
-      td {
-        padding: 5px 0;
-        vertical-align: top;
-      }
-      th.num,
-      td.num {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-      tr.total td {
-        border-top: 1px solid var(--line);
-        font-weight: 600;
-      }
-      tr.planned td {
-        color: var(--sub);
-      }
-      .muted {
-        color: var(--sub);
-        font-size: 13px;
-      }
-      .meta {
-        display: block;
-        font-size: 12px;
-        color: var(--sub);
-      }
-      .errors {
-        color: var(--warn);
-        font-size: 13px;
-        padding-top: 12px;
-      }
-      nav {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        background: #fff;
-        border-top: 1px solid var(--line);
-        padding-bottom: env(safe-area-inset-bottom);
-        z-index: 5;
-      }
-      nav button,
-      nav a {
-        flex: 1;
-        background: none;
-        border: none;
-        padding: 12px 0;
-        font-size: 13px;
-        color: var(--sub);
-        text-align: center;
-        text-decoration: none;
-      }
-      nav button.on {
-        color: var(--ink);
-        font-weight: 600;
-        box-shadow: inset 0 2px 0 var(--ink);
-      }
-      .tab {
+      .notice:empty {
         display: none;
       }
-      .tab.on {
+      .big {
+        font-size: 28px;
+        font-weight: 700;
+      }
+
+      /* ---------- 収入 ---------- */
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      .row:first-of-type {
+        border-top: none;
+      }
+      .row .body {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .meta {
         display: block;
-      }
-      input,
-      select {
-        font: inherit;
-        padding: 7px 8px;
-        border: 1px solid #c9ccd1;
-        background: #fff;
-        border-radius: 2px;
-        width: 100%;
-      }
-      input[type='checkbox'] {
-        width: auto;
-      }
-      label {
-        display: block;
-        font-size: 12px;
+        font-size: 13px;
         color: var(--sub);
       }
-      label.check {
-        display: flex;
-        gap: 6px;
-        align-items: center;
+      .row .amount {
+        font-weight: 700;
+      }
+      .day {
+        flex-shrink: 0;
+        min-width: 54px;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: var(--bg);
         font-size: 14px;
-        color: var(--ink);
+        text-align: center;
       }
-      .btn {
-        font: inherit;
-        padding: 7px 14px;
-        border: 1px solid var(--ink);
-        background: var(--ink);
-        color: #fff;
-        border-radius: 2px;
+      .row.planned .body,
+      .row.planned .amount {
+        color: var(--sub);
       }
-      .btn.ghost {
-        background: #fff;
-        color: var(--ink);
+      .tag {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 0 8px;
+        border-radius: 999px;
+        background: var(--green-soft);
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 700;
       }
-      .btn.small {
+      .total {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        font-weight: 700;
+      }
+      .months {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .months div {
+        background: var(--bg);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        font-size: 14px;
+      }
+      .months div span {
+        display: block;
+        color: var(--sub);
+        font-size: 12px;
+      }
+
+      /* ---------- 設定 ---------- */
+      details.job {
+        background: var(--surface);
+        border-radius: var(--radius);
+        margin-bottom: 12px;
+      }
+      details.job summary {
+        list-style: none;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        min-height: 64px;
+        padding: 12px 18px;
+        cursor: pointer;
+      }
+      details.job summary::-webkit-details-marker {
+        display: none;
+      }
+      details.job summary::after {
+        content: '＋';
+        color: var(--sub);
+      }
+      details.job[open] summary::after {
+        content: '－';
+      }
+      details.job summary small {
+        display: block;
         font-size: 13px;
-        padding: 3px 10px;
+        color: var(--sub);
       }
-      .btn.danger {
-        background: #fff;
-        color: var(--warn);
-        border-color: var(--warn);
+      details.job .form {
+        padding: 0 18px 18px;
       }
-      .form {
+      .grid2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
+        gap: 0 10px;
+      }
+      .unit {
+        display: flex;
+        align-items: center;
         gap: 8px;
       }
-      .form .full {
+      .unit input,
+      .unit select {
+        flex: 1;
+        min-width: 0;
+      }
+      .unit span {
+        flex-shrink: 0;
+        color: var(--sub);
+        font-size: 15px;
+      }
+      .break-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+      .break-row input {
+        width: 4.5em;
+        text-align: center;
+      }
+      .allowance {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        padding: 12px 0;
+        border-top: 1px solid var(--line);
+      }
+      .allowance:first-child {
+        border-top: none;
+        padding-top: 0;
+      }
+      .allowance .name {
         grid-column: 1 / -1;
       }
-      .job {
-        padding: 14px 0;
-        border-bottom: 1px dashed var(--line);
+      .allowance .unit {
+        min-width: 0;
       }
-      .inline {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        margin-bottom: 6px;
+      .save-bar {
+        position: sticky;
+        bottom: calc(72px + env(safe-area-inset-bottom));
+        padding: 8px 0;
       }
-      .inline input {
-        width: 5em;
+      .save-bar .btn {
+        box-shadow: 0 4px 14px rgba(6, 184, 96, 0.35);
       }
-      #status {
-        text-align: center;
-        padding: 40px 0;
-        color: var(--sub);
+      details.help summary {
+        color: var(--green);
+        font-size: 14px;
+        cursor: pointer;
+        margin-top: 8px;
       }
     </style>
   </head>
   <body>
     <header id="monthbar">
-      <button id="prev" aria-label="前の月">‹</button>
-      <h1 id="month">—</h1>
-      <button id="next" aria-label="次の月">›</button>
+      <div class="month-switch">
+        <button id="prev" aria-label="前の月">‹</button>
+        <h1 id="month">—</h1>
+        <button id="next" aria-label="次の月">›</button>
+      </div>
     </header>
 
     <main>
       <div id="status">読み込み中…</div>
-      <div class="errors" id="errors"></div>
+      <div class="notice" id="errors"></div>
 
       <!-- 収入 -->
       <div class="tab on" id="tab-income">
-        <section>
-          <h2>この月の入金予定</h2>
-          <table id="incoming"></table>
+        <section class="card">
+          <div class="muted">この月の入金予定</div>
+          <div class="big num income" id="incoming-total"></div>
+          <div id="incoming" style="margin-top: 8px"></div>
         </section>
-        <section>
+        <section class="card">
           <h2>この月に働いた分</h2>
-          <table id="work"></table>
+          <div id="work"></div>
         </section>
-        <section>
-          <h2>シフト一覧</h2>
-          <table id="shifts"></table>
-          <p class="muted" id="unmatched"></p>
+        <section class="card">
+          <h2>シフト</h2>
+          <div id="shifts"></div>
+          <p class="muted" id="unmatched" style="margin: 10px 0 0"></p>
         </section>
-        <section>
-          <h2 id="year-title">この年に支給される給与</h2>
-          <table id="year"></table>
-          <p class="muted">給与だけの額面です。交通費・仕送りは含めません。</p>
-          <table id="by-month" style="margin-top: 10px"></table>
+        <section class="card">
+          <h2 id="year-title">この年の給与</h2>
+          <div id="year"></div>
+          <div class="months" id="by-month"></div>
+          <p class="muted" style="margin: 10px 0 0">給与だけの額面です。交通費と仕送りは入りません。</p>
         </section>
       </div>
 
       <!-- 設定 -->
       <div class="tab" id="tab-settings">
-        <section>
+        <section class="card">
           <h2>シフトのカレンダー</h2>
-          <input id="ical-url" type="password" autocomplete="off" />
-          <p class="muted">
-            シフトはひとつの Google カレンダーにまとめて入れ、予定のタイトルにバイト先の名前を書きます（例：「珈琲館
-            早番」）。貼るのは、パソコンの Google カレンダーで「設定」→ 左の一覧でそのカレンダー
-            →「カレンダーの統合」にある「iCal
-            形式の非公開アドレス」です。このアドレスを知っている人は誰でも予定を読めるので、ほかの人には見せないでください。
+          <input id="ical-url" type="password" autocomplete="off" aria-label="カレンダーの非公開アドレス" />
+          <p class="muted" style="margin: 8px 0 0">
+            シフトはひとつの Google カレンダーに入れ、予定の名前にバイト先の名前を書きます（例：「珈琲館 早番」）。
           </p>
+          <details class="help">
+            <summary>アドレスの見つけ方</summary>
+            <p class="muted">
+              パソコンの Google カレンダーで「設定」→ 左の一覧でそのカレンダー →「カレンダーの統合」にある「iCal
+              形式の非公開アドレス」をコピーして貼ります。このアドレスを知っている人は誰でも予定を見られるので、ほかの人には見せないでください。
+            </p>
+          </details>
         </section>
-        <section>
-          <h2>バイト先</h2>
-          <div id="jobs"></div>
-          <button class="btn ghost" id="add-job" style="margin-top: 12px">バイト先を追加</button>
-        </section>
-        <section>
+
+        <h2 style="margin: 20px 4px 10px">バイト先</h2>
+        <div id="jobs"></div>
+        <button class="btn raised wide" id="add-job" style="margin-bottom: 12px">バイト先を追加</button>
+
+        <section class="card">
           <h2>毎月決まった収入（仕送りなど）</h2>
           <div id="allowances"></div>
-          <button class="btn ghost" id="add-allowance" style="margin-top: 8px">追加</button>
+          <button class="btn soft small" id="add-allowance" style="margin-top: 8px">追加</button>
         </section>
-        <section>
-          <h2>家計簿への記録</h2>
-          <label class="check"
-            ><input id="auto-record" type="checkbox" />給料日・仕送りの日に、見込み額を家計簿に記録する</label
-          >
-          <p class="muted">
-            給与は「給与」、仕送りは「仕送り」の収入として、その日の朝に記録します。実際の金額と違うときは、通知の「金額を直す」か家計簿の履歴から直せます。
-          </p>
+        <section class="card">
+          <label class="switch">
+            <span>給料日と仕送りの日に、見込みの金額を家計簿に付ける</span>
+            <input id="auto-record" type="checkbox" />
+          </label>
         </section>
-        <section>
-          <h2>年間の目安ライン</h2>
-          <input id="wall" type="number" inputmode="numeric" placeholder="例: 1230000" />
-          <p class="muted">1〜12月に支給される給与の合計と比べます。0 にすると表示しません。</p>
+        <section class="card">
+          <h2>1年の目安ライン</h2>
+          <div class="unit">
+            <input id="wall" type="number" inputmode="numeric" placeholder="なし" aria-label="1年の目安ライン" />
+            <span>円</span>
+          </div>
+          <p class="muted" style="margin: 8px 0 0">1〜12月にもらう給与の合計と比べます。</p>
         </section>
-        <section>
-          <button class="btn" id="save" style="width: 100%">保存</button>
-        </section>
+        <div class="save-bar"><button class="btn wide" id="save">保存</button></div>
       </div>
     </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
 
     <nav>
       <button data-tab="income" class="on">収入</button>
@@ -329,6 +313,14 @@
       const clock = (ms) => new Date(ms + 9 * 3600000).toISOString().slice(11, 16);
       const dayLabel = (n) => (n === 31 ? '末日' : n + '日');
 
+      let toastTimer = null;
+      function toast(message) {
+        $('toast').textContent = message;
+        $('toast').classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2200);
+      }
+
       async function api(path, opts = {}) {
         const res = await fetch('/api' + path, {
           ...opts,
@@ -340,7 +332,7 @@
         }
         if (!res.ok) {
           const e = await res.json().catch(() => ({}));
-          alert(e.error || 'エラーが発生しました');
+          toast(e.error || 'うまくいきませんでした。もう一度試してください');
           throw new Error(res.status);
         }
         return res.json();
@@ -367,14 +359,14 @@
         renderReport(r);
       }
 
-      // ----- 収入 -----
+      // ---------- 収入 ----------
       function renderReport(r) {
         $('month').textContent = `${r.year}年${r.month}月`;
-        $('errors').innerHTML = r.errors.map((e) => `<div>${esc(e)}</div>`).join('');
-        if (!r.hasJobs) {
-          $('errors').innerHTML = '<div>「設定」でシフトのカレンダーとバイト先を登録してください。</div>';
-        }
+        $('errors').innerHTML = r.hasJobs
+          ? r.errors.map((e) => `<div>${esc(e)}</div>`).join('')
+          : '「設定」でシフトのカレンダーとバイト先を登録してください。';
 
+        $('incoming-total').textContent = yen(r.incomingTotal);
         $('incoming').innerHTML =
           r.incoming
             .map((p) => {
@@ -383,60 +375,65 @@
                   ? `${md(p.periodStart)}〜${md(p.periodEnd)}分・${p.count}回・${hm(p.workMin)}` +
                     (p.transport ? `・うち交通費 ${yen(p.transport)}` : '')
                   : '毎月の収入';
-              return `<tr><td>${md(p.payDate)}</td><td>${esc(p.name)}<span class="meta">${detail}</span></td><td class="num">${yen(p.total)}</td></tr>`;
+              return `<div class="row"><span class="day">${md(p.payDate)}</span>
+          <span class="body">${esc(p.name)}<span class="meta">${detail}</span></span>
+          <span class="amount num">${yen(p.total)}</span></div>`;
             })
-            .join('') + `<tr class="total"><td></td><td>合計</td><td class="num">${yen(r.incomingTotal)}</td></tr>`;
+            .join('') || '<p class="muted">この月の入金予定はありません。</p>';
 
-        $('work').innerHTML =
-          '<tr><th>バイト先</th><th class="num">回数</th><th class="num">時間</th><th class="num">給与</th></tr>' +
-          r.work
-            .map(
-              (w) =>
-                `<tr><td>${esc(w.name)}${w.transport ? `<span class="meta">交通費 ${yen(w.transport)}</span>` : ''}</td><td class="num">${w.count}</td><td class="num">${hm(w.workMin)}</td><td class="num">${yen(w.pay)}</td></tr>`,
-            )
-            .join('') +
-          `<tr class="total"><td>合計</td><td></td><td class="num">${hm(r.workMinTotal)}</td><td class="num">${yen(r.workPayTotal)}</td></tr>`;
+        $('work').innerHTML = r.work.length
+          ? r.work
+              .map(
+                (w) => `<div class="row"><span class="body">${esc(w.name)}
+            <span class="meta">${w.count}回・${hm(w.workMin)}${w.transport ? `・交通費 ${yen(w.transport)}` : ''}</span></span>
+            <span class="amount num">${yen(w.pay)}</span></div>`,
+              )
+              .join('') +
+            `<div class="total"><span>合計（${hm(r.workMinTotal)}）</span><span class="num">${yen(r.workPayTotal)}</span></div>`
+          : '<p class="muted">この月のシフトはありません。</p>';
 
+        $('shifts').innerHTML =
+          r.shifts
+            .map((s) => {
+              const notes = [
+                `${clock(s.start)}〜${clock(s.end)}`,
+                s.breakMin ? `休憩${s.breakMin}分` : '',
+                s.nightMin ? `深夜${hm(s.nightMin)}` : '',
+                `時給${s.rate}円`,
+              ]
+                .filter(Boolean)
+                .join('・');
+              return `<div class="row ${s.done ? '' : 'planned'}"><span class="day">${md(s.date)}（${DOW[s.dow]}）</span>
+          <span class="body">${esc(s.jobName)}${s.done ? '' : '<span class="tag">予定</span>'}<span class="meta">${notes}</span></span>
+          <span class="amount num">${yen(s.pay)}</span></div>`;
+            })
+            .join('') || '<p class="muted">シフトはありません。</p>';
         $('unmatched').textContent = r.unmatchedTitles.length
-          ? 'どのバイト先にも当てはまらなかった予定：' +
-            r.unmatchedTitles.join('、') +
-            '（バイトの予定なら、タイトルにバイト先の名前を入れるか、設定の「タイトルに含まれる言葉」に足してください）'
+          ? `どのバイト先にも当てはまらなかった予定：${r.unmatchedTitles.join('、')}。バイトの予定なら、予定の名前にバイト先の名前を入れてください。`
           : '';
-        $('shifts').innerHTML = r.shifts.length
-          ? r.shifts
-              .map((s) => {
-                const notes = [
-                  s.breakMin ? `休憩${s.breakMin}分` : '',
-                  s.nightMin ? `深夜${hm(s.nightMin)}` : '',
-                  `時給${s.rate}`,
-                  s.done ? '' : '予定',
-                ]
-                  .filter(Boolean)
-                  .join('・');
-                return `<tr class="${s.done ? '' : 'planned'}"><td>${md(s.date)}（${DOW[s.dow]}）</td><td>${esc(s.jobName)}<span class="meta">${clock(s.start)}〜${clock(s.end)}・${notes}</span></td><td class="num">${hm(s.workMin)}</td><td class="num">${yen(s.pay)}</td></tr>`;
-              })
-              .join('')
-          : '<tr><td class="muted">シフトはありません</td></tr>';
 
-        $('year-title').textContent = `${r.year}年に支給される給与`;
+        $('year-title').textContent = `${r.year}年の給与`;
         const total = r.yearDone + r.yearPlanned;
+        const wall = r.wall > 0;
         $('year').innerHTML =
-          `<tr><td>勤務済みの分</td><td class="num">${yen(r.yearDone)}</td></tr>` +
-          `<tr><td>これからのシフトの分</td><td class="num">${yen(r.yearPlanned)}</td></tr>` +
-          `<tr class="total"><td>合計の見込み</td><td class="num">${yen(total)}</td></tr>` +
-          (r.wall > 0
-            ? `<tr><td>目安ライン</td><td class="num">${yen(r.wall)}</td></tr>` +
-              `<tr><td>目安ラインまで</td><td class="num">${total > r.wall ? '超過 ' + yen(total - r.wall) : yen(r.wall - total)}</td></tr>`
+          `<div class="muted">見込みの合計</div><div class="big num">${yen(total)}</div>` +
+          `<div class="muted">働いた分 ${yen(r.yearDone)} ＋ これからのシフト ${yen(r.yearPlanned)}</div>` +
+          (wall
+            ? `<div class="meter ${total > r.wall ? 'over' : ''}" style="margin-top:12px"><div style="width:${Math.min(100, (total / r.wall) * 100)}%"></div></div>
+          <div class="inline" style="justify-content:space-between;margin-top:6px"><span class="muted">目安ライン ${yen(r.wall)}</span>
+          <strong class="num ${total > r.wall ? 'expense' : ''}">${total > r.wall ? `${yen(total - r.wall)} 超えています` : `あと ${yen(r.wall - total)}`}</strong></div>`
             : '');
-        $('by-month').innerHTML =
-          '<tr><th>支給月</th><th class="num">給与</th></tr>' +
-          r.byMonth.map((v, i) => `<tr><td>${i + 1}月</td><td class="num">${v ? yen(v) : '—'}</td></tr>`).join('');
+        $('by-month').innerHTML = r.byMonth
+          .map((v, i) => `<div><span>${i + 1}月</span><span class="num">${v ? yen(v) : '—'}</span></div>`)
+          .join('');
       }
 
-      // ----- 設定 -----
+      // ---------- 設定 ----------
       const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
       const options = (list, value, label = (v) => v) =>
         list.map((v) => `<option value="${v}" ${v === value ? 'selected' : ''}>${label(v)}</option>`).join('');
+      const PAY_MONTH = ['当月', '翌月', '翌々月'];
+      const openJobs = new Set(); // 描き直しても開いたままにする
 
       function newJob() {
         return {
@@ -458,18 +455,18 @@
       }
 
       function renderSettings() {
-        $('jobs').innerHTML = settings.jobs.length
-          ? settings.jobs.map(jobForm).join('')
-          : '<p class="muted">まだありません。</p>';
-        $('allowances').innerHTML = settings.allowances
-          .map(
-            (a, i) => `<div class="inline" data-allowance="${i}">
-              <input data-f="name" value="${esc(a.name)}" placeholder="名前" style="width: auto; flex: 1" />
-              <input data-f="amount" type="number" inputmode="numeric" value="${a.amount}" placeholder="金額" style="width: 7em" />
-              <select data-f="day" style="width: 5.5em">${options(DAY_OPTIONS, a.day, dayLabel)}</select>
-              <button class="btn small ghost" onclick="removeAllowance(${i})">削除</button></div>`,
-          )
-          .join('');
+        $('jobs').innerHTML = settings.jobs.map(jobForm).join('');
+        $('allowances').innerHTML =
+          settings.allowances
+            .map(
+              (a, i) => `<div class="allowance" data-allowance="${i}">
+          <input class="name" data-f="name" value="${esc(a.name)}" placeholder="名前（例：仕送り）" aria-label="名前" />
+          <div class="unit"><input data-f="amount" type="number" inputmode="numeric" value="${a.amount || ''}" placeholder="金額" aria-label="金額" /><span>円</span></div>
+          <div class="unit"><span>毎月</span><select data-f="day" aria-label="日">${options(DAY_OPTIONS, a.day, dayLabel)}</select></div>
+          <button class="btn danger small" onclick="removeAllowance(${i})" style="grid-column: 1 / -1; justify-self: start">削除</button>
+        </div>`,
+            )
+            .join('') || '<p class="muted" style="margin: 0">まだありません。</p>';
         $('wall').value = settings.wall || '';
         $('ical-url').value = '';
         $('auto-record').checked = settings.autoRecord;
@@ -479,33 +476,43 @@
       }
 
       function jobForm(j, i) {
+        const summary = j.name
+          ? `時給${j.weekdayRate}円・${PAY_MONTH[j.payMonthOffset]}${dayLabel(j.payDay)}払い`
+          : '名前と時給を入れてください';
         const breaks = j.breaks
           .map(
-            (b, k) => `<div class="inline" data-break="${k}">
-              <input data-f="overHours" type="number" inputmode="decimal" value="${b.overHours}" />時間を超えたら
-              <input data-f="minutes" type="number" inputmode="numeric" value="${b.minutes}" />分
-              <button class="btn small ghost" onclick="removeBreak(${i}, ${k})">削除</button></div>`,
+            (b, k) => `<div class="break-row" data-break="${k}">
+          <input data-f="overHours" type="number" inputmode="decimal" value="${b.overHours}" aria-label="時間" />時間より長いと
+          <input data-f="minutes" type="number" inputmode="numeric" value="${b.minutes}" aria-label="分" />分
+          <button class="btn text small" onclick="removeBreak(${i}, ${k})">削除</button></div>`,
           )
           .join('');
-        return `<div class="job form" data-job="${i}">
-          <div class="full"><label>名前</label><input data-f="name" value="${esc(j.name)}" placeholder="例: 珈琲館" /></div>
-          <div class="full"><label>予定のタイトルに含まれる言葉（カンマ区切り。空ならバイト先の名前）</label>
-            <input data-f="keywords" value="${esc(j.keywords)}" placeholder="例: 珈琲館, コーヒー" /></div>
-          <div><label>平日の時給</label><input data-f="weekdayRate" type="number" inputmode="numeric" value="${j.weekdayRate || ''}" /></div>
-          <div><label>土日の時給（空なら平日と同じ）</label><input data-f="weekendRate" type="number" inputmode="numeric" value="${j.weekendRate || ''}" /></div>
-          <label class="check full"><input data-f="holidayAsWeekend" type="checkbox" ${j.holidayAsWeekend ? 'checked' : ''} />祝日も土日の時給にする</label>
-          <label class="check"><input data-f="nightEnabled" type="checkbox" ${j.nightEnabled ? 'checked' : ''} />深夜手当（22時〜翌5時）</label>
-          <div class="inline"><input data-f="nightPremium" type="number" inputmode="numeric" value="${j.nightPremium}" />% 増し</div>
-          <div class="full"><label>休憩（無給。一番長い条件に当てはまるものを使う）</label>${breaks}
-            <button class="btn small ghost" onclick="addBreak(${i})">休憩の条件を追加</button></div>
-          <div><label>実働時間の端数</label><select data-f="roundUnit">${options([1, 5, 15, 30], j.roundUnit, (v) => (v === 1 ? '切り捨てない' : v + '分単位で切り捨て'))}</select></div>
-          <div><label>交通費（1日あたり）</label><input data-f="transport" type="number" inputmode="numeric" value="${j.transport || ''}" /></div>
-          <div><label>締め日</label><select data-f="closingDay">${options(DAY_OPTIONS, j.closingDay, dayLabel)}</select></div>
-          <div><label>給料日</label><div class="inline" style="margin: 0">
-            <select data-f="payMonthOffset">${options([0, 1, 2], j.payMonthOffset, (v) => ['当月', '翌月', '翌々月'][v])}</select>
-            <select data-f="payDay">${options(DAY_OPTIONS, j.payDay, dayLabel)}</select></div></div>
-          <div class="full"><button class="btn small danger" onclick="removeJob(${i})">このバイト先を削除</button></div>
-        </div>`;
+        return `<details class="job" data-job="${i}" ${openJobs.has(i) || !j.name ? 'open' : ''} ontoggle="toggleJob(${i}, this.open)">
+        <summary><span><strong>${esc(j.name || '新しいバイト先')}</strong><small>${summary}</small></span></summary>
+        <div class="form">
+          <label class="field"><span>名前</span><input data-f="name" value="${esc(j.name)}" placeholder="例：珈琲館" /></label>
+          <label class="field"><span>予定の名前にこの言葉があれば、このバイト先（「珈琲館, コーヒー」のように。なければ名前で判定）</span>
+            <input data-f="keywords" value="${esc(j.keywords)}" /></label>
+          <div class="grid2">
+            <label class="field"><span>平日の時給</span><div class="unit"><input data-f="weekdayRate" type="number" inputmode="numeric" value="${j.weekdayRate || ''}" /><span>円</span></div></label>
+            <label class="field"><span>土日の時給</span><div class="unit"><input data-f="weekendRate" type="number" inputmode="numeric" value="${j.weekendRate || ''}" placeholder="平日と同じ" /><span>円</span></div></label>
+          </div>
+          <label class="switch" style="margin-bottom: 8px"><span>祝日も土日の時給にする</span><input data-f="holidayAsWeekend" type="checkbox" ${j.holidayAsWeekend ? 'checked' : ''} /></label>
+          <label class="switch"><span>深夜手当（22時〜翌5時）</span><input data-f="nightEnabled" type="checkbox" ${j.nightEnabled ? 'checked' : ''} /></label>
+          <label class="field"><div class="unit"><span>深夜は時給の</span><input data-f="nightPremium" type="number" inputmode="numeric" value="${j.nightPremium}" style="max-width: 6em" /><span>% 増し</span></div></label>
+          <div class="field"><span class="muted">休憩（給料が出ない時間）</span>${breaks}
+            <button class="btn soft small" onclick="addBreak(${i})">休憩の決まりを追加</button></div>
+          <div class="grid2">
+            <label class="field"><span>働いた時間の端数</span><select data-f="roundUnit">${options([1, 5, 15, 30], j.roundUnit, (v) => (v === 1 ? 'そのまま' : v + '分ごとに切り捨て'))}</select></label>
+            <label class="field"><span>交通費（1日）</span><div class="unit"><input data-f="transport" type="number" inputmode="numeric" value="${j.transport || ''}" placeholder="なし" /><span>円</span></div></label>
+            <label class="field"><span>締め日</span><select data-f="closingDay">${options(DAY_OPTIONS, j.closingDay, dayLabel)}</select></label>
+            <div class="field"><span class="muted">給料日</span><div class="unit">
+              <select data-f="payMonthOffset" aria-label="給料日の月">${options([0, 1, 2], j.payMonthOffset, (v) => PAY_MONTH[v])}</select>
+              <select data-f="payDay" aria-label="給料日の日">${options(DAY_OPTIONS, j.payDay, dayLabel)}</select></div></div>
+          </div>
+          <button class="btn danger small" data-remove onclick="removeJob(${i}, this)">このバイト先を削除</button>
+        </div>
+      </details>`;
       }
 
       /** フォームの今の値を settings に書き戻す */
@@ -549,11 +556,24 @@
         fn();
         renderSettings();
       };
-      $('add-job').onclick = () => edit(() => settings.jobs.push(newJob()));
+      window.toggleJob = (i, open) => (open ? openJobs.add(i) : openJobs.delete(i));
+      $('add-job').onclick = () =>
+        edit(() => {
+          settings.jobs.push(newJob());
+          openJobs.add(settings.jobs.length - 1);
+        });
       $('add-allowance').onclick = () => edit(() => settings.allowances.push({ name: '仕送り', amount: 0, day: 1 }));
-      window.removeJob = (i) => {
-        if (!confirm('このバイト先を削除しますか？（保存するまで反映されません）')) return;
-        edit(() => settings.jobs.splice(i, 1));
+      // 削除は2回押す（間違えて消さないように）。保存するまでは反映しない
+      window.removeJob = (i, button) => {
+        if (!button.dataset.confirm) {
+          button.dataset.confirm = '1';
+          button.textContent = 'もう一度押すと削除（保存で反映）';
+          return;
+        }
+        edit(() => {
+          settings.jobs.splice(i, 1);
+          openJobs.clear();
+        });
       };
       window.addBreak = (i) => edit(() => settings.jobs[i].breaks.push({ overHours: 8, minutes: 60 }));
       window.removeBreak = (i, k) => edit(() => settings.jobs[i].breaks.splice(k, 1));
@@ -562,12 +582,13 @@
       $('save').onclick = async () => {
         collect();
         settings = await api('/shift/settings', { method: 'PUT', body: JSON.stringify(settings) });
+        openJobs.clear();
         renderSettings();
-        alert('保存しました');
+        toast('保存しました');
         await loadReport();
       };
 
-      // ----- 操作 -----
+      // ---------- 月とタブ ----------
       function shiftMonth(m, n) {
         const [y, mo] = m.split('-').map(Number);
         const d = new Date(y, mo - 1 + n, 1);
