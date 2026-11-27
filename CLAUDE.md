@@ -16,6 +16,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/index.ts`：ルーティング（`/webhook`、`/app`、`/api/*`）
 - `src/bot.ts`：LINEイベント処理（テキスト・画像・ポストバック）と返信文
 - `src/parse.ts`：「ランチ 800」の解析、日付指定、初期カテゴリとキーワード
+- `src/category.ts`：カテゴリの親子（2段まで）。並び順・親にできるか・親でまとめた集計
 - `src/receipt.ts`：レシート画像 → Gemini → JSON
 - `src/db.ts`：D1へのアクセスはすべて `Repo` を通す
 - `src/api.ts`：LIFF画面用API。`Authorization: Bearer <LIFFのIDトークン>` を `verifyIdToken` で検証して userId を得る

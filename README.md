@@ -20,6 +20,8 @@ Cloudflare Workers + D1 で動き、グラフ・履歴・設定はLIFF画面（L
 
 カテゴリの自動判定はカテゴリごとの「キーワード」で行います（例：食費 ← ランチ, コンビニ, スタバ…）。設定画面から自由に編集できます。
 
+カテゴリは親と子の2段に分けられます（例：日用品 › 服・雑貨）。設定画面でカテゴリを追加するときに親を選ぶか、編集で親を変えます。トークでは「服 3000」「日用品 服 3000」のどちらでも子に記録でき、集計は親でまとめて子の内訳を出します。
+
 ## セットアップ
 
 ### 1. LINE側の準備
@@ -71,6 +73,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calendar.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0004_remind.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0005_subcategory.sql
 npm run deploy
 ```
 
