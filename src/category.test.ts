@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTreeText, groupByParent, orderCategories, parentError, parentName } from './category';
+import { categoryTreeText, childrenOf, groupByParent, orderCategories, parentError, parentName } from './category';
 import { parseEntry } from './parse';
 import type { Category } from './types';
 
@@ -85,5 +85,13 @@ describe('parseEntry と子カテゴリ', () => {
       cat(2, '日用品'),
     ];
     expect(parseEntry('ユニクロ 2000', withKw)).toMatchObject({ category: '服' });
+  });
+});
+
+describe('childrenOf', () => {
+  it('親の子を並び順で返す。子や、子のない親なら空', () => {
+    expect(childrenOf(cats, '日用品').map((c) => c.name)).toEqual(['服', '雑貨']);
+    expect(childrenOf(cats, '服')).toEqual([]);
+    expect(childrenOf(cats, '食費')).toEqual([]);
   });
 });

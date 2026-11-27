@@ -84,3 +84,13 @@ export function categoryTreeText(cats: Pick<Category, 'id' | 'name' | 'sort' | '
     })
     .join(' / ');
 }
+
+/** そのカテゴリの子（並び順）。子でないか、子がなければ空 */
+export function childrenOf<T extends Pick<Category, 'id' | 'name' | 'sort' | 'parentId'>>(
+  cats: T[],
+  name: string,
+): T[] {
+  const self = cats.find((c) => c.name === name && c.parentId === 0);
+  if (!self) return [];
+  return cats.filter((c) => c.parentId === self.id).sort((a, b) => a.sort - b.sort || a.id - b.id);
+}
