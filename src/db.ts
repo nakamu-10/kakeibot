@@ -180,7 +180,7 @@ export class Repo {
       .prepare(
         `UPDATE entries SET
            type = COALESCE(?, type), category = COALESCE(?, category), amount = COALESCE(?, amount),
-           memo = COALESCE(?, memo), date = COALESCE(?, date)
+           memo = COALESCE(?, memo), date = COALESCE(?, date), edit_count = edit_count + 1
          WHERE id = ? AND user_id = ?`,
       )
       .bind(f.type ?? null, f.category ?? null, f.amount ?? null, f.memo ?? null, f.date ?? null, id, userId)
