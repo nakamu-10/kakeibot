@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { jstMidnight } from './calc';
-import { parseShifts, rangeForYear, readSimpleEvent, trimToRange } from './ical';
+import { parseEvents, rangeForYear, readSimpleEvent, trimToRange } from './ical';
 
 // Google カレンダーの非公開iCalに似せた架空のデータ
 const ICS = [
@@ -65,8 +65,8 @@ const ICS = [
 
 const jst = (y: number, m: number, d: number, h: number) => jstMidnight(y, m, d) + h * 3600_000;
 
-describe('parseShifts', () => {
-  const shifts = parseShifts(ICS, 7, rangeForYear(2026));
+describe('parseEvents', () => {
+  const shifts = parseEvents(ICS, rangeForYear(2026));
 
   it('繰り返しを展開し、休み・変更・単発を反映する', () => {
     expect(shifts.map((s) => [s.start, s.end])).toEqual([
@@ -76,12 +76,12 @@ describe('parseShifts', () => {
       [jst(2026, 11, 28, 9), jst(2026, 11, 28, 13)],
     ]);
   });
-  it('変更した回だけ説明欄の休憩を使う', () => {
-    expect(shifts.map((s) => s.breakOverride)).toEqual([null, 30, null, null]);
-    expect(shifts.every((s) => s.jobId === 7)).toBe(true);
+  it('タイトルと説明欄を読む。変更した回はその回の説明欄', () => {
+    expect(shifts.map((s) => s.description)).toEqual(['', '休憩30', '', '']);
+    expect(shifts.map((s) => s.title)).toEqual(['バイト', 'バイト', 'バイト', '']);
   });
   it('期間の外は返さない', () => {
-    expect(parseShifts(ICS, 7, rangeForYear(2015))).toEqual([]);
+    expect(parseEvents(ICS, rangeForYear(2015))).toEqual([]);
   });
 });
 
@@ -115,15 +115,13 @@ describe('trimToRange', () => {
 
   it('昔から続く毎週の繰り返しを進めても、期間内の回は同じ', () => {
     expect(trimToRange(series('FREQ=WEEKLY'), rangeForYear(2026))).not.toContain('20220105');
-    expect(parseShifts(series('FREQ=WEEKLY'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(expected(7));
+    expect(parseEvents(series('FREQ=WEEKLY'), rangeForYear(2026)).map((s) => s.start)).toEqual(expected(7));
   });
   it('隔週や毎日でも周期がずれない', () => {
-    expect(parseShifts(series('FREQ=WEEKLY;INTERVAL=2;BYDAY=WE'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(
+    expect(parseEvents(series('FREQ=WEEKLY;INTERVAL=2;BYDAY=WE'), rangeForYear(2026)).map((s) => s.start)).toEqual(
       expected(14),
     );
-    expect(parseShifts(series('FREQ=DAILY;INTERVAL=3'), 1, rangeForYear(2026)).map((s) => s.start)).toEqual(
-      expected(3),
-    );
+    expect(parseEvents(series('FREQ=DAILY;INTERVAL=3'), rangeForYear(2026)).map((s) => s.start)).toEqual(expected(3));
   });
   it('期間より前に終わった繰り返しは落とし、回数指定はそのまま', () => {
     expect(trimToRange(series('FREQ=WEEKLY;UNTIL=20230101T000000Z'), rangeForYear(2026))).not.toContain('VEVENT');
@@ -150,6 +148,7 @@ describe('readSimpleEvent', () => {
     expect(readSimpleEvent(block)).toEqual({
       start: jst(2026, 11, 1, 9),
       end: jst(2026, 11, 1, 12),
+      title: '',
       description: 'メモ, 早番\n休憩30',
     });
   });

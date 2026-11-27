@@ -216,7 +216,7 @@ export class Repo {
     }));
   }
   // ---------- シフト収入 ----------
-  async shiftJobs(userId: string): Promise<StoredJob[]> {
+  async shiftJobs(userId: string): Promise<Job[]> {
     const r = await this.db
       .prepare('SELECT * FROM shift_jobs WHERE user_id = ? ORDER BY sort, id')
       .bind(userId)
@@ -238,32 +238,32 @@ export class Repo {
     return r.results;
   }
 
-  async incomeWall(userId: string): Promise<number> {
+  /** 年間の目安ラインと、シフトのカレンダーの非公開URL（暗号化したまま。空 = 未登録） */
+  async shiftSettings(userId: string): Promise<{ wall: number; icalUrlEnc: string }> {
     const r = await this.db
-      .prepare('SELECT income_wall FROM shift_settings WHERE user_id = ?')
+      .prepare('SELECT income_wall, ical_url_enc FROM shift_settings WHERE user_id = ?')
       .bind(userId)
-      .first<{ income_wall: number }>();
-    return r?.income_wall ?? 0;
+      .first<{ income_wall: number; ical_url_enc: string }>();
+    return { wall: r?.income_wall ?? 0, icalUrlEnc: r?.ical_url_enc ?? '' };
   }
 
   /**
    * シフト収入の設定をまとめて保存する。
-   * jobs にない既存のバイト先は消す。icalUrlEnc が null のバイト先は URL をそのまま残す
+   * jobs にない既存のバイト先は消す。icalUrlEnc が null なら今の URL を残す
    */
   async saveShiftSettings(
     userId: string,
-    jobs: { job: Job; icalUrlEnc: string | null }[],
-    allowances: Allowance[],
-    wall: number,
+    s: { jobs: Job[]; allowances: Allowance[]; wall: number; icalUrlEnc: string | null },
   ): Promise<void> {
-    const keep = jobs.map((j) => j.job.id).filter((id) => id > 0);
+    const keep = s.jobs.map((j) => j.id).filter((id) => id > 0);
     const stmts = [
       this.db
         .prepare(`DELETE FROM shift_jobs WHERE user_id = ? AND id NOT IN (SELECT value FROM json_each(?))`)
         .bind(userId, JSON.stringify(keep)),
-      ...jobs.map(({ job: j, icalUrlEnc }, sort) => {
+      ...s.jobs.map((j, sort) => {
         const fields = [
           j.name,
+          j.keywords,
           j.weekdayRate,
           j.weekendRate,
           j.holidayAsWeekend ? 1 : 0,
@@ -280,45 +280,44 @@ export class Repo {
         if (j.id > 0) {
           return this.db
             .prepare(
-              `UPDATE shift_jobs SET name = ?, weekday_rate = ?, weekend_rate = ?, holiday_as_weekend = ?,
+              `UPDATE shift_jobs SET name = ?, keywords = ?, weekday_rate = ?, weekend_rate = ?, holiday_as_weekend = ?,
                  night_enabled = ?, night_premium = ?, breaks = ?, round_unit = ?, transport = ?, closing_day = ?,
-                 pay_month_offset = ?, pay_day = ?, sort = ?, ical_url_enc = COALESCE(?, ical_url_enc)
+                 pay_month_offset = ?, pay_day = ?, sort = ?
                WHERE id = ? AND user_id = ?`,
             )
-            .bind(...fields, icalUrlEnc, j.id, userId);
+            .bind(...fields, j.id, userId);
         }
         return this.db
           .prepare(
-            `INSERT INTO shift_jobs (name, weekday_rate, weekend_rate, holiday_as_weekend, night_enabled, night_premium,
-               breaks, round_unit, transport, closing_day, pay_month_offset, pay_day, sort, ical_url_enc, user_id)
+            `INSERT INTO shift_jobs (name, keywords, weekday_rate, weekend_rate, holiday_as_weekend, night_enabled,
+               night_premium, breaks, round_unit, transport, closing_day, pay_month_offset, pay_day, sort, user_id)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
-          .bind(...fields, icalUrlEnc ?? '', userId);
+          .bind(...fields, userId);
       }),
       this.db.prepare('DELETE FROM allowances WHERE user_id = ?').bind(userId),
-      ...allowances.map((a, sort) =>
+      ...s.allowances.map((a, sort) =>
         this.db
           .prepare('INSERT INTO allowances (user_id, name, amount, day, sort) VALUES (?, ?, ?, ?, ?)')
           .bind(userId, a.name, a.amount, a.day, sort),
       ),
       this.db
         .prepare(
-          `INSERT INTO shift_settings (user_id, income_wall) VALUES (?, ?)
-           ON CONFLICT (user_id) DO UPDATE SET income_wall = excluded.income_wall`,
+          `INSERT INTO shift_settings (user_id, income_wall, ical_url_enc) VALUES (?, ?, COALESCE(?, ''))
+           ON CONFLICT (user_id) DO UPDATE SET
+             income_wall = excluded.income_wall,
+             ical_url_enc = COALESCE(?, shift_settings.ical_url_enc)`,
         )
-        .bind(userId, wall),
+        .bind(userId, s.wall, s.icalUrlEnc, s.icalUrlEnc),
     ];
     await this.db.batch(stmts);
   }
 }
 
-/** D1 に置いたバイト先（URL は暗号化したまま） */
-export type StoredJob = Job & { icalUrlEnc: string };
-
 interface ShiftJobRow {
   id: number;
   name: string;
-  ical_url_enc: string;
+  keywords: string;
   weekday_rate: number;
   weekend_rate: number;
   holiday_as_weekend: number;
@@ -332,16 +331,17 @@ interface ShiftJobRow {
   pay_day: number;
 }
 
-function rowToJob(r: ShiftJobRow): StoredJob {
+function rowToJob(r: ShiftJobRow): Job {
   let breaks: unknown = [];
   try {
     breaks = JSON.parse(r.breaks);
   } catch {
     // 壊れていたら休憩なしとして読む
   }
-  const job = sanitizeJob({
+  return sanitizeJob({
     id: r.id,
     name: r.name,
+    keywords: r.keywords,
     weekdayRate: r.weekday_rate,
     weekendRate: r.weekend_rate,
     holidayAsWeekend: r.holiday_as_weekend === 1,
@@ -354,5 +354,4 @@ function rowToJob(r: ShiftJobRow): StoredJob {
     payMonthOffset: r.pay_month_offset,
     payDay: r.pay_day,
   });
-  return { ...job, icalUrlEnc: r.ical_url_enc };
 }

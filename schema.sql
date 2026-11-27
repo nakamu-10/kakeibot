@@ -33,13 +33,13 @@ CREATE TABLE IF NOT EXISTS entries (
 CREATE INDEX IF NOT EXISTS idx_entries_user_date ON entries (user_id, date);
 CREATE INDEX IF NOT EXISTS idx_categories_user ON categories (user_id, sort);
 
--- ---------- シフト収入（既存DBには migrations/0001_shift_income.sql を流す） ----------
--- バイト先（1行 = Google カレンダー1つ）
+-- ---------- シフト収入（既存DBには migrations/ の SQL を番号順に流す） ----------
+-- バイト先（シフトはひとつのカレンダーに入れ、予定のタイトルで振り分ける）
 CREATE TABLE IF NOT EXISTS shift_jobs (
   id                 INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id            TEXT NOT NULL,
   name               TEXT NOT NULL,
-  ical_url_enc       TEXT NOT NULL DEFAULT '',    -- iCalの非公開URL（ICAL_ENCRYPTION_KEYで暗号化）。空 = 未登録
+  keywords           TEXT NOT NULL DEFAULT '',    -- 予定のタイトルでこのバイト先と判定する言葉（カンマ区切り）。空 = name
   weekday_rate       INTEGER NOT NULL DEFAULT 0,
   weekend_rate       INTEGER NOT NULL DEFAULT 0,  -- 0 = 平日と同じ
   holiday_as_weekend INTEGER NOT NULL DEFAULT 0,
@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS allowances (
 -- シフト収入のユーザー設定
 CREATE TABLE IF NOT EXISTS shift_settings (
   user_id     TEXT PRIMARY KEY,
-  income_wall INTEGER NOT NULL DEFAULT 0          -- 年間の目安ライン。0 = 表示しない
+  income_wall  INTEGER NOT NULL DEFAULT 0,        -- 年間の目安ライン。0 = 表示しない
+  ical_url_enc TEXT NOT NULL DEFAULT ''          -- シフトのカレンダーの非公開URL（ICAL_ENCRYPTION_KEYで暗号化）。空 = 未登録
 );
 
 CREATE INDEX IF NOT EXISTS idx_shift_jobs_user ON shift_jobs (user_id, sort);

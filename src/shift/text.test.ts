@@ -16,7 +16,9 @@ const base = {
   byMonth: [],
   wall: 0,
   errors: [],
+  unmatchedTitles: [],
   hasJobs: true,
+  hasCalendar: true,
 } satisfies Omit<ShiftReport, 'incoming'>;
 
 const report: ShiftReport = {

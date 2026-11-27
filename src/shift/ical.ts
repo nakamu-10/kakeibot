@@ -1,5 +1,5 @@
 import ICAL from 'ical.js';
-import { jstMidnight, parseBreakOverride, type RawShift } from './calc';
+import { jstMidnight } from './calc';
 
 const JST_OFFSET = 9 * 3600_000;
 const DAY_MS = 86_400_000;
@@ -21,15 +21,25 @@ export function rangeForYear(year: number): Range {
   return { from: jstMidnight(year - 1, 9, 1), to: jstMidnight(year + 1, 1, 1) };
 }
 
+/** カレンダーの予定1回分（時刻は UNIX ミリ秒） */
+export interface CalendarEvent {
+  start: number;
+  end: number;
+  title: string;
+  description: string;
+}
+
+type Push = (start: number, end: number, title: string | null, description: string | null) => void;
+
 /**
- * iCal のテキストから、期間内に始まるシフトを取り出す。
+ * iCal のテキストから、期間内に始まる予定を取り出す。
  * 繰り返し（RRULE・EXDATE・1回だけ変更した予定）を展開し、終日の予定と取り消された予定は除く
  */
-export function parseShifts(ics: string, jobId: number, range: Range): RawShift[] {
-  const shifts: RawShift[] = [];
-  const push = (start: number, end: number, description: string | null | undefined) => {
+export function parseEvents(ics: string, range: Range): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  const push: Push = (start, end, title, description) => {
     if (start < range.from || start >= range.to) return;
-    shifts.push({ jobId, start, end, breakOverride: parseBreakOverride(description) });
+    events.push({ start, end, title: title ?? '', description: description ?? '' });
   };
 
   // 単純な予定は先に自前で読み、残り（繰り返しと、自前で読めない形）だけを ical.js に渡す。
@@ -38,24 +48,18 @@ export function parseShifts(ics: string, jobId: number, range: Range): RawShift[
     if (/^(RRULE|RECURRENCE-ID)[;:]/m.test(block)) return block;
     const e = readSimpleEvent(block);
     if (e === undefined) return block;
-    if (e !== 'skip') push(e.start, e.end, e.description);
+    if (e !== 'skip') push(e.start, e.end, e.title, e.description);
     return '';
   });
   if (/BEGIN:VEVENT/.test(rest)) readWithIcalJs(trimToRange(rest, range), range.to, push);
-  return shifts.sort((a, b) => a.start - b.start);
-}
-
-interface SimpleEvent {
-  start: number;
-  end: number;
-  description: string;
+  return events.sort((a, b) => a.start - b.start);
 }
 
 /**
  * 繰り返しのない予定を ical.js を通さずに読む。
  * 終日・取り消しは 'skip'。日本時間・UTC・タイムゾーンなし以外の形は undefined を返して ical.js に任せる
  */
-export function readSimpleEvent(block: string): SimpleEvent | 'skip' | undefined {
+export function readSimpleEvent(block: string): CalendarEvent | 'skip' | undefined {
   const text = block.replace(/\r?\n[ \t]/g, ''); // 折り返された行をつなぐ
   if (/^STATUS:CANCELLED\s*$/im.test(text)) return 'skip';
   const prop = (name: string) => new RegExp(`^${name}((?:;[^:\\r\\n]*)?):(.*?)\\r?$`, 'm').exec(text);
@@ -67,10 +71,9 @@ export function readSimpleEvent(block: string): SimpleEvent | 'skip' | undefined
   if (start === 'date' || end === 'date') return 'skip';
   if (start === undefined || end === undefined) return undefined;
   // iCal のエスケープ（\n \, \; \\）を戻す
-  const description = (prop('DESCRIPTION')?.[2] ?? '').replace(/\\([nN,;\\])/g, (_, c: string) =>
-    c === 'n' || c === 'N' ? '\n' : c,
-  );
-  return { start, end, description };
+  const textValue = (name: string) =>
+    (prop(name)?.[2] ?? '').replace(/\\([nN,;\\])/g, (_, c: string) => (c === 'n' || c === 'N' ? '\n' : c));
+  return { start, end, title: textValue('SUMMARY'), description: textValue('DESCRIPTION') };
 }
 
 /** DTSTART・DTEND の値 → UNIX ミリ秒。日付だけなら 'date'、自前で読めない形なら undefined */
@@ -143,11 +146,7 @@ function toMs(t: ICAL.Time): number {
 const cancelled = (c: ICAL.Component) => String(c.getFirstPropertyValue('status') ?? '').toUpperCase() === 'CANCELLED';
 
 /** 繰り返し予定を ical.js で展開する（rangeTo で止める。期間の始まりより前は push 側で落とす） */
-function readWithIcalJs(
-  ics: string,
-  rangeTo: number,
-  push: (start: number, end: number, description: string | null) => void,
-): void {
+function readWithIcalJs(ics: string, rangeTo: number, push: Push): void {
   const root = new ICAL.Component(ICAL.parse(ics) as unknown[]);
   for (const tz of root.getAllSubcomponents('vtimezone')) ICAL.TimezoneService.register(tz);
 
@@ -163,7 +162,7 @@ function readWithIcalJs(
 
   const add = (start: ICAL.Time, end: ICAL.Time, item: ICAL.Event) => {
     if (start.isDate || cancelled(item.component)) return;
-    push(toMs(start), toMs(end), item.description);
+    push(toMs(start), toMs(end), item.summary, item.description);
   };
 
   for (const { master, exceptions } of groups.values()) {
