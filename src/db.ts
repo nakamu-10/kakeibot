@@ -203,6 +203,52 @@ export class Repo {
     return r.results;
   }
 
+  /**
+   * 条件で記録を探す（新しい順に limit 件）。件数と合計は、limit に関係なく条件に合うものすべてで数える
+   */
+  async searchEntries(
+    userId: string,
+    f: EntrySearch,
+  ): Promise<{ entries: Entry[]; count: number; expense: number; income: number }> {
+    const where: string[] = [];
+    const params: (string | number)[] = [];
+    const add = (sql: string, ...values: (string | number)[]) => {
+      where.push(sql);
+      params.push(...values);
+    };
+    add('user_id = ?', userId);
+    if (f.from) add('date >= ?', f.from);
+    if (f.to) add('date <= ?', f.to);
+    if (f.type) add('type = ?', f.type);
+    if (f.categories?.length) add(`category IN (${f.categories.map(() => '?').join(', ')})`, ...f.categories);
+    if (f.keyword) {
+      // LIKE の % と _ は、言葉どおりに探すためエスケープする
+      const like = `%${f.keyword.replace(/[\\%_]/g, (c) => '\\' + c)}%`;
+      add("(memo LIKE ? ESCAPE '\\' OR store LIKE ? ESCAPE '\\' OR category LIKE ? ESCAPE '\\')", like, like, like);
+    }
+    if (f.minAmount != null) add('amount >= ?', f.minAmount);
+    if (f.maxAmount != null) add('amount <= ?', f.maxAmount);
+    const cond = where.join(' AND ');
+    const [list, agg] = await this.db.batch([
+      this.db
+        .prepare(
+          `SELECT id, type, category, amount, memo, store, date, source FROM entries WHERE ${cond}
+           ORDER BY date DESC, id DESC LIMIT ?`,
+        )
+        .bind(...params, f.limit),
+      this.db
+        .prepare(
+          `SELECT COUNT(*) AS count,
+             COALESCE(SUM(CASE WHEN type = 'expense' THEN amount END), 0) AS expense,
+             COALESCE(SUM(CASE WHEN type = 'income' THEN amount END), 0) AS income
+           FROM entries WHERE ${cond}`,
+        )
+        .bind(...params),
+    ]);
+    const totals = agg.results[0] as { count: number; expense: number; income: number };
+    return { entries: list.results as Entry[], ...totals };
+  }
+
   async allEntries(userId: string): Promise<Entry[]> {
     const r = await this.db
       .prepare(
@@ -458,4 +504,17 @@ function rowToJob(r: ShiftJobRow): Job {
     payMonthOffset: r.pay_month_offset,
     payDay: r.pay_day,
   });
+}
+
+export interface EntrySearch {
+  from?: string;
+  to?: string;
+  type?: EntryType;
+  /** この中のどれかのカテゴリ（親を探すときは子の名前も入れる） */
+  categories?: string[];
+  /** メモ・店名・カテゴリ名に含まれる言葉 */
+  keyword?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  limit: number;
 }

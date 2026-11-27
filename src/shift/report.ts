@@ -15,7 +15,14 @@ export type ShiftReport = Awaited<ReturnType<typeof loadReport>>;
  * カレンダーと祝日を読み、月のレポートを作る（LIFF・トーク・給料日の通知で共通）。
  * カレンダーが読めなければ errors に理由を入れ、仕送りなどだけで計算を続ける
  */
-export async function loadReport(env: Env, repo: Repo, userId: string, year: number, month: number, nowMs: number) {
+export async function loadReport(
+  env: Pick<Env, 'ICAL_ENCRYPTION_KEY'>,
+  repo: Repo,
+  userId: string,
+  year: number,
+  month: number,
+  nowMs: number,
+) {
   const [jobs, allowances, settings, holidays] = await Promise.all([
     repo.shiftJobs(userId),
     repo.allowances(userId),
@@ -51,7 +58,11 @@ export async function loadReport(env: Env, repo: Repo, userId: string, year: num
 /** ユーザーに見せてよい理由のエラー */
 class CalendarError extends Error {}
 
-async function readCalendar(env: Env, icalUrlEnc: string, range: Range): Promise<CalendarEvent[]> {
+async function readCalendar(
+  env: Pick<Env, 'ICAL_ENCRYPTION_KEY'>,
+  icalUrlEnc: string,
+  range: Range,
+): Promise<CalendarEvent[]> {
   if (!icalUrlEnc)
     throw new CalendarError('シフトのカレンダーが未登録です。設定でカレンダーのアドレスを貼ってください');
   const icalUrl = await decryptText(env.ICAL_ENCRYPTION_KEY, icalUrlEnc);
