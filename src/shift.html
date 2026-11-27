@@ -279,6 +279,15 @@
           <button class="btn ghost" id="add-allowance" style="margin-top: 8px">追加</button>
         </section>
         <section>
+          <h2>家計簿への記録</h2>
+          <label class="check"
+            ><input id="auto-record" type="checkbox" />給料日・仕送りの日に、見込み額を家計簿に記録する</label
+          >
+          <p class="muted">
+            給与は「給与」、仕送りは「仕送り」の収入として、その日の朝に記録します。実際の金額と違うときは、通知の「金額を直す」か家計簿の履歴から直せます。
+          </p>
+        </section>
+        <section>
           <h2>年間の目安ライン</h2>
           <input id="wall" type="number" inputmode="numeric" placeholder="例: 1230000" />
           <p class="muted">1〜12月に支給される給与の合計と比べます。0 にすると表示しません。</p>
@@ -463,6 +472,7 @@
           .join('');
         $('wall').value = settings.wall || '';
         $('ical-url').value = '';
+        $('auto-record').checked = settings.autoRecord;
         $('ical-url').placeholder = settings.hasIcal
           ? '登録済み（変えるときだけ貼る）'
           : 'https://calendar.google.com/calendar/ical/…/basic.ics';
@@ -530,6 +540,7 @@
         }));
         settings.wall = Number($('wall').value) || 0;
         settings.icalUrl = $('ical-url').value;
+        settings.autoRecord = $('auto-record').checked;
       }
 
       // 行の追加・削除は、入力中の値を残したまま描き直す

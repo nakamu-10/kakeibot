@@ -40,6 +40,7 @@ export async function handleShiftApi(
       allowances,
       wall: Math.max(0, Math.round(Number(body.wall) || 0)),
       icalUrlEnc: icalUrl ? await encryptText(env.ICAL_ENCRYPTION_KEY, icalUrl) : null,
+      autoRecord: body.autoRecord !== false,
     });
     return json(await settingsForClient(repo, userId));
   }
@@ -61,5 +62,11 @@ async function settingsForClient(repo: Repo, userId: string) {
     repo.allowances(userId),
     repo.shiftSettings(userId),
   ]);
-  return { jobs, allowances, wall: settings.wall, hasIcal: settings.icalUrlEnc !== '' };
+  return {
+    jobs,
+    allowances,
+    wall: settings.wall,
+    hasIcal: settings.icalUrlEnc !== '',
+    autoRecord: settings.autoRecord,
+  };
 }
