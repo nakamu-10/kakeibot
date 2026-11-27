@@ -4,11 +4,11 @@ export const WRITE = 'kakeibo:write';
 
 export const SCOPE_LABELS: Record<string, string> = {
   [READ]: '家計簿を見る（記録・集計・シフト収入）',
-  [WRITE]: '家計簿に記録する・直す・消す',
+  [WRITE]: '家計簿に記録する・直す・消す、予算を変える（取り消せる）',
 };
 
 /** 書き込みの許可が要るツール */
-const WRITE_TOOLS = new Set(['add_entries', 'update_entry', 'delete_entry']);
+const WRITE_TOOLS = new Set(['add_entries', 'update_entry', 'delete_entry', 'set_budget', 'undo_changes']);
 
 /**
  * MCP のリクエスト（JSON-RPC。まとめて送られた配列も）が、書き込みのツールを呼んでいるか。

@@ -145,6 +145,19 @@
         font-weight: 700;
       }
 
+      /* ---------- AI による変更 ---------- */
+      .change {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 15px;
+      }
+      .change:last-child {
+        border-bottom: none;
+      }
+      .change .btn {
+        margin-top: 8px;
+      }
+
       /* ---------- 設定のカテゴリ一覧 ---------- */
       .cat-item {
         display: flex;
@@ -356,6 +369,10 @@
         <section class="card">
           <h2>シフト収入</h2>
           <a class="btn soft wide" href="/app/shift">シフト収入を開く</a>
+        </section>
+        <section class="card">
+          <h2>AI による変更</h2>
+          <div id="changes"></div>
         </section>
         <section class="card">
           <h2>データ</h2>
@@ -597,6 +614,7 @@
       const parentOf = (c) => data.categories.find((x) => x.id === c.parentId);
 
       function renderSettings() {
+        renderChanges();
         $('budget-input').value = data.budget || '';
         $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
@@ -822,6 +840,36 @@
         toast(amount ? `予算を ${yen(amount)} にしました` : '予算を出さないようにしました');
         await load();
       };
+      /** AI（Claude など）が加えた変更。1回の依頼ごとに、元に戻せる */
+      function renderChanges() {
+        $('changes').innerHTML = data.changes.length
+          ? data.changes
+              .map(
+                (c) => `<div class="change">
+          <div class="muted">${esc(c.createdAt.slice(5, 16).replace('-', '/'))}${c.undone ? '・取り消し済み' : ''}</div>
+          ${c.summaries.map((s) => `<div>${esc(s)}</div>`).join('')}
+          ${c.undone ? '' : `<button class="btn soft small" onclick="undoChange(this, '${esc(c.batch)}')">元に戻す</button>`}
+        </div>`,
+              )
+              .join('')
+          : '<p class="muted" style="margin: 0">AI からの変更はまだありません。</p>';
+      }
+      // 元に戻すのも2回押す（間違えて押さないように）
+      window.undoChange = async (button, batch) => {
+        if (!button.dataset.confirm) {
+          button.dataset.confirm = '1';
+          button.textContent = 'もう一度押すと元に戻す';
+          return;
+        }
+        const r = await api('/changes/undo', { method: 'POST', body: JSON.stringify({ batch }) });
+        toast(
+          r.skipped.length
+            ? `戻しました（${r.skipped.length}件は、その後に直されていたので戻していません）`
+            : '元に戻しました',
+        );
+        await load();
+      };
+
       $('remind').onchange = async () => {
         await api('/remind', { method: 'PUT', body: JSON.stringify({ on: $('remind').checked }) });
         data.remind = $('remind').checked;

@@ -117,6 +117,15 @@ function summary(month) {
     budget,
     categories: orderCategories(categories),
     remind,
+    changes: [
+      {
+        batch: 'b2',
+        createdAt: `${today} 10:15:00`,
+        undone: false,
+        summaries: ['追加：食費 ¥800（ランチ）', '追加：交通費 ¥220（電車）'],
+      },
+      { batch: 'b1', createdAt: `${today} 09:00:00`, undone: true, summaries: ['予算：¥40,000 → ¥45,000'] },
+    ],
     today,
   };
 }
@@ -200,6 +209,7 @@ createServer(async (req, res) => {
     if (e) Object.assign(e, Object.fromEntries(Object.entries(b).filter(([, v]) => v != null)));
     return json(res, { ok: true });
   }
+  if (p === '/api/changes/undo') return json(res, { ok: true, undone: ['追加：食費 ¥800（ランチ）'], skipped: [] });
   if (p.startsWith('/api/categories')) return json(res, { ok: true });
   if (p === '/api/export.csv') return (res.writeHead(200, { 'content-type': 'text/csv' }), res.end('preview\n'));
 
