@@ -138,3 +138,24 @@ describe('parseLines', () => {
     expect(r.entries.map((e) => e.type)).toEqual(['income', 'expense']);
   });
 });
+
+describe('日付だけの行（先月の分をまとめて記録）', () => {
+  const today = '2026-11-28';
+  it('「10月26日」の行のあとは、全部その日付', () => {
+    const r = parseLines(
+      ['１０月２６日', '趣味　81,706円', '食費　51,432円', '交通費　1,148円'].join('\n'),
+      DEFAULT_CATEGORIES,
+      today,
+    );
+    expect(r.failed).toEqual([]);
+    expect(r.entries.map((e) => [e.date, e.category, e.amount])).toEqual([
+      ['2026-10-26', '趣味', 81706],
+      ['2026-10-26', '食費', 51432],
+      ['2026-10-26', '交通費', 1148],
+    ]);
+  });
+  it('「10/26」「2026/10/26」だけの行も日付', () => {
+    expect(extractDate('10/26', today)).toEqual({ date: '2026-10-26', rest: '' });
+    expect(extractDate('2026/10/26', today)).toEqual({ date: '2026-10-26', rest: '' });
+  });
+});

@@ -59,7 +59,7 @@ export function extractDate(input: string, today: string): { date: string; rest:
   ];
   for (const [re, n] of rel) if (re.test(s)) return { date: shift(n), rest: s.replace(re, '') };
 
-  const m = s.match(/^(?:(\d{4})[/\-.])?(\d{1,2})[/\-.月](\d{1,2})日?\s+/);
+  const m = s.match(/^(?:(\d{4})[/\-.])?(\d{1,2})[/\-.月](\d{1,2})日?(?:\s+|$)/);
   if (m) {
     const [ty, tm] = today.split('-').map(Number);
     const mo = Number(m[2]);
@@ -173,12 +173,12 @@ export function parseLines(
     .filter(Boolean)
     .slice(0, MAX_LINES);
   for (const line of lines) {
-    const header = extractDate(line + ' ', today);
-    if (!header.rest) {
-      base = header.date;
+    const { date, rest } = extractDate(line, today);
+    // 日付だけの行
+    if (!rest) {
+      base = date;
       continue;
     }
-    const { date, rest } = extractDate(line, today);
     const parsed = parseEntry(rest, categories);
     if (parsed) entries.push({ ...parsed, date: rest === line ? base : date });
     else failed.push(line);

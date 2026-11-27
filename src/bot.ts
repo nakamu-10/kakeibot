@@ -273,18 +273,18 @@ async function recordLines(ctx: Ctx, input: string, cats: Category[], today: str
   for (const e of entries) ids.push(await repo.addEntry(userId, { ...e, source: 'text' }));
   if (ids.length === 1 && !failed.length) return replyRecorded(ctx, await repo.mustGetEntry(userId, ids[0]));
 
-  const month = monthOf(today);
+  const recorded = await Promise.all(ids.map((id) => repo.mustGetEntry(userId, id)));
+  // 全部が同じ月（先月の分をまとめて記録したときなど）なら、その月の支出を出す
+  const months = [...new Set(entries.map((e) => monthOf(e.date)))];
+  const month = months.length === 1 ? months[0] : monthOf(today);
+  const isThisMonth = month === monthOf(today);
   const s = await repo.monthSummary(userId, month);
   const budget = await repo.budget(userId);
-  const recorded = s.entries.filter((e) => ids.includes(e.id)).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-  // 先月以前の日付の記録は今月の集計に入らないので、別に読む
-  for (const id of ids) {
-    if (!recorded.some((e) => e.id === id)) recorded.push(await repo.mustGetEntry(userId, id));
-  }
+
   const lines = [`${ids.length}件記録しました ✓`, ...recorded.map(describe)];
   if (failed.length) lines.push('', '読み取れなかった行', ...failed.map((f) => `・${f}`));
-  lines.push('', `今月の支出 ${yen(s.expense)}`);
-  if (budget) lines.push(`予算残り ${yen(budget - s.expense)}`);
+  lines.push('', `${isThisMonth ? '今月' : `${Number(month.slice(5))}月`}の支出 ${yen(s.expense)}`);
+  if (budget && isThisMonth) lines.push(`予算残り ${yen(budget - s.expense)}`);
   await reply(env, replyToken, [
     text(lines.join('\n'), [
       qrPostback('まとめて取り消す', `action=undoall&ids=${ids.join(',')}`, 'まとめて取り消す'),
