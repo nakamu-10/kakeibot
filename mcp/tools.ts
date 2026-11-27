@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { groupByParent } from '../src/category';
-import { budgetChange, entryChange, undoBatch } from '../src/changes';
+import { budgetChange, entryChange, fixedCostChange, undoBatch } from '../src/changes';
+import { findRecurring, monthlyTotal, sanitizeFixedCost } from '../src/fixed';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
 import { monthOf, shiftMonth, todayJST } from '../src/util';
@@ -333,6 +334,92 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       await repo.setBudget(userId, amount);
       await repo.recordChanges(userId, crypto.randomUUID(), [budgetChange(before, amount)]);
       return result({ before, after: amount });
+    },
+  );
+
+  // ---------- 固定費・サブスク ----------
+  server.registerTool(
+    'list_fixed_costs',
+    {
+      title: '固定費・サブスクの一覧',
+      description:
+        '登録した固定費・サブスク（家賃・スマホ・サブスクなど）。monthlyTotal は、やめていないものを毎月かかる額にならした合計（毎年のものは12で割る）。' +
+        '毎月いくら貯金・投資に回せるかは、収入から、固定費と、固定費以外の支出の平均を引いて考える。',
+      annotations: READ_ONLY,
+    },
+    async () => {
+      const items = await repo.fixedCosts(userId);
+      return result({ items, monthlyTotal: monthlyTotal(items) });
+    },
+  );
+
+  server.registerTool(
+    'find_recurring_payments',
+    {
+      title: '固定費の候補を探す',
+      description:
+        '直近 months か月の記録から、毎月のように同じくらいの金額で出ている支払い（固定費・サブスクの候補）を探す。登録済みのものは除く。' +
+        '見つけたものを登録するかは、ユーザーに確かめてから save_fixed_cost で登録する。',
+      inputSchema: z.object({ months: z.number().int().min(2).max(12).default(6) }),
+      annotations: READ_ONLY,
+    },
+    async ({ months }) => {
+      const from = `${shiftMonth(monthOf(todayJST()), -(months - 1))}-01`;
+      const [entries, registered] = await Promise.all([repo.expensesSince(userId, from), repo.fixedCosts(userId)]);
+      return result(findRecurring(entries, registered));
+    },
+  );
+
+  server.registerTool(
+    'save_fixed_cost',
+    {
+      title: '固定費を登録・変更する',
+      description:
+        '固定費・サブスクを登録する（id を省く）か、変える（id を渡す。渡したものだけでなく、すべての項目を送る）。' +
+        'やめたサブスクは消さずに active を false にすると、あとで見返せる。category は支出のカテゴリ名（list_categories）。undo_changes で戻せる。',
+      inputSchema: z.object({
+        id: z.number().int().optional(),
+        name: z.string().min(1).max(30),
+        amount: z.number().int().positive().describe('1回に払う額（円）'),
+        category: z.string(),
+        cycle: z.enum(['monthly', 'yearly']).default('monthly'),
+        day: z.number().int().min(1).max(31).default(1).describe('払う日（31は月末）'),
+        month: z.number().int().min(0).max(12).optional().describe('毎年のとき、払う月（1〜12）。毎月なら省くか 0'),
+        active: z.boolean().default(true),
+        memo: z.string().max(100).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const cats = await repo.categories(userId);
+      if (!cats.some((c) => c.name === args.category && c.type === 'expense')) {
+        return error(`支出のカテゴリ「${args.category}」が見つかりません。list_categories の名前を使ってください。`);
+      }
+      const before = args.id ? await repo.getFixedCost(userId, args.id) : null;
+      if (args.id && !before) return error(`id ${args.id} の固定費が見つかりません。`);
+      const saved = await repo.saveFixedCost(userId, sanitizeFixedCost({ ...args, id: args.id ?? 0 }));
+      await repo.recordChanges(userId, crypto.randomUUID(), [
+        fixedCostChange(before ? 'update' : 'insert', before, saved),
+      ]);
+      return result({ before, after: saved });
+    },
+  );
+
+  server.registerTool(
+    'delete_fixed_cost',
+    {
+      title: '固定費を消す',
+      description:
+        '固定費を消す。やめたサブスクは、消さずに save_fixed_cost で active を false にする方がよい。undo_changes で戻せる。',
+      inputSchema: z.object({ id: z.number().int() }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const before = await repo.getFixedCost(userId, id);
+      if (!before) return error(`id ${id} の固定費が見つかりません。`);
+      await repo.deleteFixedCost(userId, id);
+      await repo.recordChanges(userId, crypto.randomUUID(), [fixedCostChange('delete', before, null)]);
+      return result({ deleted: before });
     },
   );
 

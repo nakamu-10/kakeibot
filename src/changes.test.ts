@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { budgetChange, entryChange, sameEntry } from './changes';
+import { budgetChange, entryChange, fixedCostChange, sameEntry } from './changes';
+import { sanitizeFixedCost } from './fixed';
 import type { Entry } from './types';
 
 const lunch: Entry = {
@@ -32,6 +33,20 @@ describe('budgetChange', () => {
   it('予算の要約。0 は「なし」', () => {
     expect(budgetChange(0, 50000).summary).toBe('予算：なし → ¥50,000');
     expect(budgetChange(50000, 45000)).toMatchObject({ before: { amount: 50000 }, after: { amount: 45000 } });
+  });
+});
+
+describe('fixedCostChange', () => {
+  it('固定費の要約。毎年とやめたものも分かる', () => {
+    const prime = sanitizeFixedCost({ id: 3, name: 'Amazonプライム', amount: 5900, cycle: 'yearly', month: 3 });
+    expect(fixedCostChange('insert', null, prime)).toMatchObject({
+      target: 'fixed_cost',
+      targetId: 3,
+      summary: '固定費を追加：Amazonプライム ¥5,900/年',
+    });
+    expect(fixedCostChange('update', prime, { ...prime, active: false }).summary).toBe(
+      '固定費を変更：Amazonプライム ¥5,900/年 → Amazonプライム ¥5,900/年（やめた）',
+    );
   });
 });
 
