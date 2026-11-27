@@ -90,3 +90,14 @@ CREATE TABLE IF NOT EXISTS payday_entries (
 
 CREATE INDEX IF NOT EXISTS idx_shift_jobs_user ON shift_jobs (user_id, sort);
 CREATE INDEX IF NOT EXISTS idx_allowances_user ON allowances (user_id, sort);
+
+-- 外の AI から送られた、アプリへの要望（持ち主が見て Issue にするかを決める）
+CREATE TABLE IF NOT EXISTS feedback (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    TEXT NOT NULL,
+  body       TEXT NOT NULL,
+  status     TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new','done')), -- 持ち主が見たら 'done'
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback (user_id, created_at);
