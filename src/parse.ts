@@ -149,3 +149,39 @@ export function parseAmountOnly(t: string): number | null {
   const n = m ? Number(m[1]) : 0;
   return n > 0 ? n : null;
 }
+
+/** 1通でまとめて記録できる行数 */
+const MAX_LINES = 30;
+
+export type LineEntry = ParsedEntry & { date: string };
+
+/**
+ * 改行で区切った複数の記録を1行ずつ読む。
+ * 日付だけの行（「昨日」「11/20」）は、次の行からの日付になる。行頭に日付がある行はその日付
+ */
+export function parseLines(
+  input: string,
+  categories: CategoryLite[],
+  today: string,
+): { entries: LineEntry[]; failed: string[] } {
+  const entries: LineEntry[] = [];
+  const failed: string[] = [];
+  let base = today;
+  const lines = input
+    .split(/\r?\n/)
+    .map((l) => normalize(l))
+    .filter(Boolean)
+    .slice(0, MAX_LINES);
+  for (const line of lines) {
+    const header = extractDate(line + ' ', today);
+    if (!header.rest) {
+      base = header.date;
+      continue;
+    }
+    const { date, rest } = extractDate(line, today);
+    const parsed = parseEntry(rest, categories);
+    if (parsed) entries.push({ ...parsed, date: rest === line ? base : date });
+    else failed.push(line);
+  }
+  return { entries, failed };
+}

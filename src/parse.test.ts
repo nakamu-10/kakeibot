@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CATEGORIES, extractDate, parseAmountOnly, parseEntry } from './parse';
+import { DEFAULT_CATEGORIES, extractDate, parseAmountOnly, parseEntry, parseLines } from './parse';
 import { extractInteractionText, parseReceiptJson, receiptModels, shouldTryNextModel } from './receipt';
 
 const p = (s: string) => parseEntry(s, DEFAULT_CATEGORIES);
@@ -106,5 +106,35 @@ describe('parseAmountOnly', () => {
     expect(parseAmountOnly('6500円')).toBe(6500);
     expect(parseAmountOnly('ランチ 800')).toBeNull();
     expect(parseAmountOnly('0')).toBeNull();
+  });
+});
+
+describe('parseLines', () => {
+  const today = '2026-11-28';
+  const lines = (...l: string[]) => l.join('\n');
+  it('1行に1件ずつ読み、読めない行は failed に入れる', () => {
+    const r = parseLines(lines('ランチ 800', '', 'コンビニ 350', 'あいうえお'), DEFAULT_CATEGORIES, today);
+    expect(r.entries).toEqual([
+      { type: 'expense', category: '食費', amount: 800, memo: 'ランチ', date: today },
+      { type: 'expense', category: '食費', amount: 350, memo: 'コンビニ', date: today },
+    ]);
+    expect(r.failed).toEqual(['あいうえお']);
+  });
+  it('日付だけの行は次の行からの日付。行頭の日付はその行だけ', () => {
+    const r = parseLines(
+      lines('昨日', 'ランチ 800', '11/20 本 1200', '電車 220', '今日', 'スーパー 2480'),
+      DEFAULT_CATEGORIES,
+      today,
+    );
+    expect(r.entries.map((e) => [e.date, e.amount])).toEqual([
+      ['2026-11-27', 800],
+      ['2026-11-20', 1200],
+      ['2026-11-27', 220],
+      ['2026-11-28', 2480],
+    ]);
+  });
+  it('収入も混ぜられる', () => {
+    const r = parseLines(lines('+給料 50000', 'ランチ 800'), DEFAULT_CATEGORIES, today);
+    expect(r.entries.map((e) => e.type)).toEqual(['income', 'expense']);
   });
 });
