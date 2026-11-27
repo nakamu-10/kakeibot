@@ -7,7 +7,10 @@
   - `@cloudflare/workers-oauth-provider` の `OAuthProvider` で、1つの Worker が OAuth の認証サーバーと MCP サーバーを兼ねる。MCP の処理は `agents` の `createMcpHandler`（状態を持たない）
   - 本人確認は LINE ログイン。LIFF と同じチャネルを使い、トークで記録した人と同じ userId にする。AI アプリごとの許可の画面を出してから LINE に進み、LINE とは PKCE でやり取りする
   - Claude は CIMD、Gemini・Muse は DCR でつなぐので、両方を有効にする
-  - スコープは読み取り（`kakeibo:read`）から始め、書き込みはフェーズ2で `kakeibo:write` を足す。予算・カテゴリ・シフト収入の設定は AI に変えさせない
+  - スコープは読み取り（`kakeibo:read`）と書き込み（`kakeibo:write`、記録の追加・修正・削除）。予算・カテゴリ・シフト収入の設定は AI に変えさせない
+  - 許可の画面では、見るのはいつも許し、書き込みはチェックで選べる（初めはオン）。AI アプリが読み取りしか求めていなくても書き込みを出すのは、記録するたびに許可を取り直さずに済むようにするため
+  - 書き込みの許可なしに書き込みのツールを呼んだときは、HTTP の 403（`insufficient_scope`）で許可を求め直してもらう（MCP の step-up）。SDK のツールごとの `scopeChallenge` は、ハンドラーに認証情報が渡るかに頼るので使わず、`/mcp` の入口で JSON-RPC の本文を見て判断する
+  - 書き込みのツールは、許可がなくても一覧には出す。AI が記録もできると分かるようにするため
 - 理由：
   - Issue の計画では認証サーバーと MCP サーバーを別の Worker にしていたが、ライブラリは1つの Worker で両方を兼ねる形も正式に支えている。AI の入口は1つだけなので、Service Binding と2つ目のデプロイがない方が簡単
   - ボットの Worker と分けると、ボットのデプロイと MCP サーバーのデプロイが互いに影響しない

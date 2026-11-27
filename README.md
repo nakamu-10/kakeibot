@@ -74,6 +74,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calend
 npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0004_remind.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0005_subcategory.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0006_edit_count.sql
 npm run deploy
 ```
 
@@ -119,7 +120,7 @@ npm run deploy
 
 ## 外の AI から使う（MCP）
 
-Claude などの AI アプリに家計簿をつなぐと、チャットで「今月コンビニでいくら使った？」「先月と比べて何が増えた？」「このペースだと月末いくら？」のように聞けます。ボットとは別の Worker（`mcp/`、名前は `kakeibot-mcp`）で動きます。今は読み取りだけです（Issue #10）。
+Claude などの AI アプリに家計簿をつなぐと、チャットで「今月コンビニでいくら使った？」「先月と比べて何が増えた？」「このペースだと月末いくら？」のように聞けます。「昨日の飲み会4000円とタクシー1800円つけて」のように記録や修正もできます。ボットとは別の Worker（`mcp/`、名前は `kakeibot-mcp`）で動きます（Issue #10）。
 
 ### 使い始めるとき（1回だけ）
 
@@ -143,16 +144,21 @@ LINE ログインチャネルが「開発中」の間は、チャネルの管理
 - Claude：「設定」→「コネクタ」→「カスタムコネクタを追加」に `https://kakeibot-mcp.<サブドメイン>.workers.dev/mcp` を入れる。つなぐと許可の画面と LINE ログインが出る
 - Gemini・Muse：設定のカスタムアプリ・コネクタの追加に、同じ URL を入れる（地域やアカウントによっては、その項目がないことがある）
 
-### できること（読み取り）
+### できること
 
-| ツール              | 内容                                                     |
-| ------------------- | -------------------------------------------------------- |
-| `list_categories`   | カテゴリの一覧（親子つき）                               |
-| `search_entries`    | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき） |
-| `get_summary`       | 月の収支とカテゴリ別の支出・割合                         |
-| `compare_months`    | 2つの月のカテゴリ別の差                                  |
-| `get_budget_status` | 予算に対するペースと、月末の見込み                       |
-| `get_shift_income`  | シフト収入の入金予定・年間の給与・バイト先の設定         |
+| ツール              | 内容                                                            |
+| ------------------- | --------------------------------------------------------------- |
+| `list_categories`   | カテゴリの一覧（親子つき）                                      |
+| `search_entries`    | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき）        |
+| `get_summary`       | 月の収支とカテゴリ別の支出・割合                                |
+| `compare_months`    | 2つの月のカテゴリ別の差                                         |
+| `get_budget_status` | 予算に対するペースと、月末の見込み                              |
+| `get_shift_income`  | シフト収入の入金予定・年間の給与・バイト先の設定                |
+| `add_entries`       | 記録をまとめて追加（30件まで）。書き込みの許可が要る            |
+| `update_entry`      | 記録の日付・カテゴリ・金額・メモを直す。書き込みの許可が要る    |
+| `delete_entry`      | 記録を消す（AI アプリが消す前に確かめる）。書き込みの許可が要る |
+
+つなぐときの許可の画面で「家計簿に記録する・直す・消す」を外すと、見るだけになります。予算・カテゴリ・シフト収入の設定は、AI からは変えられません。
 
 ## ローカル開発
 

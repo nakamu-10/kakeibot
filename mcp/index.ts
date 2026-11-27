@@ -2,7 +2,7 @@ import { OAuthProvider, insufficientScope, type OAuthResourceContext } from '@cl
 import { createMcpHandler } from 'agents/mcp/server';
 import { handleAuth } from './auth';
 import type { McpEnv } from './env';
-import { READ, SCOPE_LABELS } from './scopes';
+import { READ, SCOPE_LABELS, WRITE, callsWriteTool } from './scopes';
 import { createServer } from './tools';
 
 /**
@@ -17,12 +17,20 @@ export default {
     provider ??= new OAuthProvider<McpEnv>({
       apiRoute: '/mcp',
       apiHandler: {
-        fetch(req, env, ctx) {
+        async fetch(req, env, ctx) {
           // OAuthProvider が、確かめたトークン（auth）と completeAuthorization() の props を入れる
           const { auth, props } = ctx as OAuthResourceContext<{ userId?: string }>;
-          if (!auth.scope.includes(READ)) return Promise.resolve(insufficientScope(auth, [READ]));
+          if (!auth.scope.includes(READ)) return insufficientScope(auth, [READ]);
           const userId = props.userId;
-          if (!userId) return Promise.resolve(new Response('no user', { status: 403 }));
+          if (!userId) return new Response('no user', { status: 403 });
+          // 書き込みの許可なしに書き込みのツールを呼んだら、403 で許可を求め直してもらう
+          if (!auth.scope.includes(WRITE) && req.method === 'POST') {
+            const body: unknown = await req
+              .clone()
+              .json()
+              .catch(() => null);
+            if (callsWriteTool(body)) return insufficientScope(auth, [READ, WRITE]);
+          }
           return createMcpHandler(() => createServer(env, userId))(req, env, ctx);
         },
       },

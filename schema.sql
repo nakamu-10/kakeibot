@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS entries (
   memo       TEXT NOT NULL DEFAULT '',
   store      TEXT NOT NULL DEFAULT '',
   date       TEXT NOT NULL,                   -- 'YYYY-MM-DD'（日本時間）
-  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app' | 'payday'
+  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app' | 'payday' | 'ai'
+  edit_count INTEGER NOT NULL DEFAULT 0,      -- 記録を直した回数（使い方から改善案を出すため）
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

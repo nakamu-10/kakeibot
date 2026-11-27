@@ -29,11 +29,17 @@ describe('consentPage', () => {
     expect(html).not.toContain('<script>');
     expect(html).toContain(escape('<script>'));
   });
-  it('知っているスコープだけを日本語で出し、送り先のホストを見せる', () => {
+  it('見るのはいつも許し、書き込みは選べる（初めはオン）。知らないスコープは出さない', () => {
     const html = consentPage(details as never, 'h1');
-    expect(html).toContain('家計簿を見る');
+    expect(html).toContain('<input type="hidden" name="scope" value="kakeibo:read">');
+    expect(html).toContain('<input type="checkbox" name="scope" value="kakeibo:write" checked>');
     expect(html).not.toContain('unknown:scope');
     expect(html).toContain('<strong>claude.ai</strong>');
+  });
+  it('アプリが offline_access を求めたら引き継ぐ', () => {
+    expect(consentPage({ ...details, scope: ['kakeibo:read', 'offline_access'] } as never, 'h1')).toContain(
+      'value="offline_access"',
+    );
   });
   it('このパソコンのアプリに渡すときは注意を出す', () => {
     expect(consentPage({ ...details, redirectIsLoopback: true } as never, 'h1')).toContain('このパソコンの中のアプリ');
