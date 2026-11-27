@@ -6,7 +6,8 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 ## コマンド
 
 - 開発：`npm run dev`（初回は `cp .dev.vars.example .dev.vars` と `npm run db:init:local`）
-- 確認：`npm run lint`、`npm run typecheck`、`npm test`、`npm run knip`
+- 確認：`npm run check`（整形・lint・knip・型・テスト・2つの Worker のバンドル）。これが通れば PR を出してよい
+- 個別：`npm run lint`、`npm run typecheck`、`npm test`、`npm run knip`、`npm run build`
 - 整形：`npm run format`
 - Webhookを手で送る：`node scripts/webhook.mjs "ランチ 800"`（`npm run dev` 中に）
 - LIFF画面を手元で見る：`node scripts/preview.mjs` → `http://localhost:8790/app`（架空のデータ。LINE ログインは要らない）
@@ -43,7 +44,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 ## 開発ルール
 
 - 読みやすい名前と素直なコードを選ぶ。共通化は本当に同じ処理だけ
-- コメントは必要な「なぜ」だけを書く
+- コメントは必要な「なぜ」だけを書く。区切り線や★・【】で飾らない
 - 書き直したら、使わなくなったファイル・export・依存を消す。「あとで使う」コードは残さない
 - 処理を足す・変えるときは、テストも足す（`src/*.test.ts`、vitest）。純粋な関数に切り出してテストする
 - ライブラリやLINE APIは、書く前に今の版のドキュメントを確かめる。deprecatedな書き方を避ける
@@ -54,6 +55,25 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - 入力欄の文字は 16px 以上（iPhone が入力のたびに拡大しないように）。押せるものは高さ 44px 以上
 - ブラウザの `alert`・`confirm`・`prompt` は使わない。知らせは `toast`、入力は下から出る入力欄、削除は2回押す
 - 画面を変えたら `node scripts/preview.mjs` で、スマホの幅で見て確かめる
+- 作業の初めに `docs/HANDOFF.md` を読み、終わりに「今の状態」と「次にすること」を更新する。急がないタスクと相談は GitHub Issues に書く
+
+## 書き方の例
+
+- コメントには、コードを読んでも分からない理由だけを書く
+  - 書く：`// 16px 未満だと iPhone が入力のたびに拡大する`
+  - 書かない：`// 金額を保存する`（次の行を読めば分かる）
+- ファイルの頭に処理の流れを書き並べない。流れは関数の名前と分け方で見せる
+- 番号付きのコメントで区切るほど長い関数は、関数に分ける
+- 使わなくなったコードは、コメントアウトで残さずに消す
+- 日本語の文に、言い直しや前置きを書かない。1文には1つのことだけを書く
+  - 書く：`給料日の朝に、見込み額を収入として記録する。`
+  - 書かない：`ここでは給料日の処理を行います。具体的には、見込み額を収入として記録する処理となっています。`
+
+## 本番
+
+- 本番の状態はコードから推測しない。`docs/HANDOFF.md` の日付つきの記述か、外から読むだけの確認（`curl` など）で確かめてから話す
+- デプロイ・シークレット・`--remote` の D1 操作はユーザーが手で行う（Claude には `.claude/settings.json` で禁止）
+- 移行 SQL は `migrations/` に番号順に足すだけにする。適用済みのファイルは書き換えない。デプロイより先に流してもらう
 
 ## この環境での確かめ方
 
@@ -66,19 +86,31 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - 整形・名前の変更は、機能の変更と別のcommitにする
 - メッセージは`feat: 〜する`の形（`fix`・`docs`・`chore`・`refactor`など）。本文に「なぜ」を書く
 - mainに直接pushせず、ブランチを切ってPRを出す
+- PRは小さくする（目安は差分150行まで。生成物とテストの架空のデータは数えない）
+
+## レビュー
+
+ひとりで開発しているので、人のレビューの代わりに次の順で確かめてからマージする。
+
+1. CI（static・test・build・secrets）が全部通る
+2. PR を作った会話の記憶を持たない Claude で `/code-review <PR番号> --comment` を実行し、機械的なバグやテストの抜けを PR にコメントさせる
+   - 別のセッションか、会話を引き継がないサブエージェント（`general-purpose` など）を使う。`fork` は使わない
+   - サブエージェントに渡すのは PR の番号と手順だけにする。作った経緯を渡すと、思い込みが移る。渡した指示の全文を PR にコメントで残す
+   - 直して処理の流れや条件が変わったら、PR の番号と直した commit の SHA だけを渡し、その commit だけをもう一度レビューさせる。3回目でも指摘が出たら、ユーザーに相談する
+3. ユーザーが GitHub の画面で、差分全体を他人が書いたつもりで読む
+4. 本番のデータ・鍵・認証・移行 SQL に関わる PR は、一晩おいて読み直してからマージする
+
+- Claude は、ユーザーがその PR を「マージしてよい」と言ったときだけマージする
+- 急ぎで手順を省くときは、省いた手順と理由を PR にコメントしてからマージする
 
 ## してはいけないこと
 
 - `.dev.vars`・`.env`をcommitしない。環境変数を足したら`.dev.vars.example`と`wrangler.toml`のコメントも更新する
 - 秘密の値（チャネルシークレット・アクセストークン・APIキー）を `app.html` や `[vars]` に書かない
-- `wrangler deploy`、`wrangler secret`、`--remote` 付きのD1操作はしない（本番に触る操作はユーザーがする）
+- `wrangler deploy`、`wrangler secret`、`--remote` 付きのD1操作はしない（「本番」の節）
 - force push、`--no-verify`はしない
 - 依存の追加と`git push`は、実行する前に確認する
 
 ## 次にやること
 
-README.md の「次にやること」を参照。優先度順：
-
-1. LINEグループでの共有家計簿・割り勘精算（均等割り・収入比率などの傾斜割り、メンバー別の支出比較、精算ボタン）
-2. 買い物メモ（グループで共有するチェックリスト）
-3. PayPay取引履歴CSVの取り込み（明細を選んで取り込み、カテゴリは個別に変更可）
+`docs/HANDOFF.md` の「次にすること」と GitHub Issues を見る。
