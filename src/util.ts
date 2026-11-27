@@ -49,3 +49,9 @@ export function arrayBufferToBase64(buf: ArrayBuffer): string {
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 }
+
+/** 日本時間のその日の0時を、D1 の datetime('now') と比べられる UTC の 'YYYY-MM-DD HH:MM:SS' にする */
+export function jstDayStartUtc(date: string): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d) - 9 * 3600_000).toISOString().slice(0, 19).replace('T', ' ');
+}

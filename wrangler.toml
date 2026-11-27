@@ -8,9 +8,11 @@ type = "Text"
 globs = ["**/*.html"]
 fallthrough = true
 
-# 毎朝8時（日本時間）に給料日の通知を送る。cron は UTC で書く
+# cron は UTC で書く。変えたら src/index.ts の scheduled も合わせる
+# 0 23 * * *：毎朝8時（日本時間）に給料日・仕送りの日の記録と通知
+# 0 12 * * *：毎晩21時（日本時間）に記録忘れ通知
 [triggers]
-crons = ["0 23 * * *"]
+crons = ["0 23 * * *", "0 12 * * *"]
 
 [[d1_databases]]
 binding = "DB"

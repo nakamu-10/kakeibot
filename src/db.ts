@@ -88,6 +88,32 @@ export class Repo {
     await this.db.prepare('UPDATE users SET budget = ? WHERE id = ?').bind(amount, userId).run();
   }
 
+  // ---------- 記録忘れ通知 ----------
+  async remind(userId: string): Promise<boolean> {
+    const r = await this.db.prepare('SELECT remind FROM users WHERE id = ?').bind(userId).first<{ remind: number }>();
+    return r?.remind === 1;
+  }
+
+  async setRemind(userId: string, on: boolean): Promise<void> {
+    await this.db
+      .prepare('UPDATE users SET remind = ? WHERE id = ?')
+      .bind(on ? 1 : 0, userId)
+      .run();
+  }
+
+  /** 通知をオンにしていて、sinceUtc 以降に自分で1件も記録していない人（給料日の自動記録は数えない） */
+  async usersToRemind(sinceUtc: string): Promise<string[]> {
+    const r = await this.db
+      .prepare(
+        `SELECT id FROM users u WHERE remind = 1 AND NOT EXISTS (
+           SELECT 1 FROM entries e WHERE e.user_id = u.id AND e.source != 'payday' AND e.created_at >= ?
+         )`,
+      )
+      .bind(sinceUtc)
+      .all<{ id: string }>();
+    return r.results.map((x) => x.id);
+  }
+
   // ---------- 記録 ----------
   async addEntry(
     userId: string,

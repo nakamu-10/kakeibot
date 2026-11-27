@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   budget       INTEGER NOT NULL DEFAULT 0,    -- 月予算（0 = 未設定）
   fix_entry_id INTEGER NOT NULL DEFAULT 0,    -- 「金額を直す」を押した記録。次に数字だけ送るとこの記録の金額を直す
   fix_until    TEXT NOT NULL DEFAULT '',      -- fix_entry_id の期限（ISO 8601）
+  remind       INTEGER NOT NULL DEFAULT 0,    -- 記録忘れ通知（毎晩21時）を送るか
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

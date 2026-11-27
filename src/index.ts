@@ -5,6 +5,7 @@ import { handleApi } from './api';
 import appHtml from './app.html';
 import shiftHtml from './shift.html';
 import { runPaydays } from './shift/payday';
+import { runReminders } from './remind';
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -49,8 +50,12 @@ export default {
     return new Response('not found', { status: 404 });
   },
 
-  // Cron Trigger（wrangler.toml）。毎朝8時（日本時間）に給料日・仕送りの日の記録と通知をする
-  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
-    ctx.waitUntil(runPaydays(env, new Date()));
+  // Cron Trigger（wrangler.toml の crons と同じ文字列で分ける）
+  scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    const now = new Date(controller.scheduledTime);
+    // 毎朝8時（日本時間）：給料日・仕送りの日の記録と通知
+    if (controller.cron === '0 23 * * *') ctx.waitUntil(runPaydays(env, now));
+    // 毎晩21時（日本時間）：記録忘れ通知
+    if (controller.cron === '0 12 * * *') ctx.waitUntil(runReminders(env, now));
   },
 };
