@@ -16,7 +16,7 @@ database_id = "834047d8-bd46-47a4-843a-a2223f6a2350"
 # npx wrangler kv namespace create OAUTH_KV で出た id を貼る
 [[kv_namespaces]]
 binding = "OAUTH_KV"
-id = "ここに OAUTH_KV の id を貼る"
+id = "e529608897564c6e88b80d16491a2327"
 
 [vars]
 PUBLIC_URL = "https://kakeibot-mcp.kocchi.workers.dev"
