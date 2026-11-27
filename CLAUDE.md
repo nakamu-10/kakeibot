@@ -23,6 +23,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/db.ts`：D1へのアクセスはすべて `Repo` を通す
 - `src/api.ts`：LIFF画面用API。`Authorization: Bearer <LIFFのIDトークン>` を `verifyIdToken` で検証して userId を得る
 - `src/line.ts`：署名検証・返信・画像取得・クイックリプライ・プッシュ
+- `src/changes.ts`：AI が加えた変更の履歴と取り消し（1回の依頼ごと。その後に人が直したものは戻さない）。MCP で記録や設定を変えるツールは、必ず `recordChanges` で残す
 - `src/remind.ts`：記録忘れ通知（Cron Trigger、毎晩21時。`src/index.ts` の `scheduled` で crons ごとに分ける）
 - `src/shift/`：シフト収入
   - `calc.ts`：シフトから給料・入金予定を計算する（純粋関数。時刻は日本時間固定）

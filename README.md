@@ -76,6 +76,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0004_remind.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0005_subcategory.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0006_edit_count.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0007_feedback.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0008_changes.sql
 npm run deploy
 ```
 
@@ -147,21 +148,24 @@ LINE ログインチャネルが「開発中」の間は、チャネルの管理
 
 ### できること
 
-| ツール               | 内容                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------ |
-| `list_categories`    | カテゴリの一覧（親子つき）                                                                       |
-| `search_entries`     | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき）                                         |
-| `get_summary`        | 月の収支とカテゴリ別の支出・割合                                                                 |
-| `compare_months`     | 2つの月のカテゴリ別の差                                                                          |
-| `get_budget_status`  | 予算に対するペースと、月末の見込み                                                               |
-| `get_shift_income`   | シフト収入の入金予定・年間の給与・バイト先の設定                                                 |
-| `add_entries`        | 記録をまとめて追加（30件まで）。書き込みの許可が要る                                             |
-| `update_entry`       | 記録の日付・カテゴリ・金額・メモを直す。書き込みの許可が要る                                     |
-| `delete_entry`       | 記録を消す（AI アプリが消す前に確かめる）。書き込みの許可が要る                                  |
-| `get_usage_insights` | 使い方の分析（記録の付け方・「その他」・よく直す記録・記録のない日）。アプリの直しどころを考える |
-| `send_feedback`      | アプリへの要望を、開発者に届くよう非公開で残す                                                   |
+| ツール               | 内容                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `list_categories`    | カテゴリの一覧（親子つき）                                                                           |
+| `search_entries`     | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき）                                             |
+| `get_summary`        | 月の収支とカテゴリ別の支出・割合                                                                     |
+| `compare_months`     | 2つの月のカテゴリ別の差                                                                              |
+| `get_budget_status`  | 予算に対するペースと、月末の見込み                                                                   |
+| `get_shift_income`   | シフト収入の入金予定・年間の給与・バイト先の設定                                                     |
+| `add_entries`        | 記録をまとめて追加（30件まで）。書き込みの許可が要る                                                 |
+| `update_entry`       | 記録の日付・カテゴリ・金額・メモを直す。書き込みの許可が要る                                         |
+| `delete_entry`       | 記録を消す（AI アプリが消す前に確かめる）。書き込みの許可が要る                                      |
+| `get_usage_insights` | 使い方の分析（記録の付け方・「その他」・よく直す記録・記録のない日）。アプリの直しどころを考える     |
+| `send_feedback`      | アプリへの要望を、開発者に届くよう非公開で残す                                                       |
+| `set_budget`         | 月の予算を変える。書き込みの許可が要る                                                               |
+| `list_changes`       | AI が加えた変更の履歴（1回の依頼ごと）                                                               |
+| `undo_changes`       | AI が加えた変更を、1回の依頼ごとに元に戻す。その後に自分で直した記録は戻さない。書き込みの許可が要る |
 
-つなぐときの許可の画面で「家計簿に記録する・直す・消す」を外すと、見るだけになります。予算・カテゴリ・シフト収入の設定は、AI からは変えられません。
+つなぐときの許可の画面で「家計簿に記録する・直す・消す、予算を変える」を外すと、見るだけになります。カテゴリとシフト収入の設定は、AI からは変えられません。AI が加えた変更は、家計簿の画面の「設定」→「AI による変更」からも元に戻せます。
 
 ### 届いた要望を見る（持ち主）
 
