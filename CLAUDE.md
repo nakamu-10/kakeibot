@@ -22,7 +22,8 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/line.ts`：署名検証・返信・画像取得・クイックリプライ
 - `src/shift/`：シフト収入
   - `calc.ts`：シフトから給料・入金予定を計算する（純粋関数。時刻は日本時間固定）
-  - `ical.ts`：iCal → シフト。単純な予定は自前で読み、繰り返しだけ ical.js で展開する（Workers の CPU 時間のため）
+  - `ical.ts`：iCal → 予定。単純な予定は自前で読み、繰り返しだけ ical.js で展開する（Workers の CPU 時間のため）
+  - `match.ts`：ひとつのカレンダーの予定を、タイトルに含まれる言葉でバイト先に振り分ける
   - `secret.ts`：iCal の非公開URLの暗号化。URL は API から返さず、ログにも出さない
   - `report.ts`：カレンダーと祝日を読んで月のレポートを作る（LIFF・トークの「収入」・給料日の通知で共通）
   - `text.ts`：トークの返信文と通知文。`notify.ts`：給料日の通知（Cron Trigger、毎朝8時）

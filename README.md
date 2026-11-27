@@ -72,8 +72,9 @@ LINE_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=yyy npm run richmenu
 
 ## シフト収入
 
-バイトのシフトを Google カレンダー（バイト先ごとに1つ）に入れておくと、時給・深夜手当・休憩・締め日・給料日から収入を計算します。家計簿の「設定」→「シフト収入を開く」、または `https://liff.line.me/<LIFF ID>/shift` で開きます。
+バイトのシフトをひとつの Google カレンダーに入れておくと、時給・深夜手当・休憩・締め日・給料日から収入を計算します。家計簿の「設定」→「シフト収入を開く」、または `https://liff.line.me/<LIFF ID>/shift` で開きます。
 
+- 予定のタイトルにバイト先の名前を書きます（例：「珈琲館 早番」）。名前以外の言葉で分けたいときは、バイト先の設定の「タイトルに含まれる言葉」に足します。どのバイト先にも当てはまらない予定は数えません
 - 予定の説明欄に「休憩60」「休憩:30」と書くと、その回だけ休憩の分数を変えられます
 - 終日の予定は数えません。祝日は [holidays-jp](https://holidays-jp.github.io/) から取ります
 - トークで「収入」と送ると、今月の入金予定を返します
@@ -88,14 +89,17 @@ LINE_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=yyy npm run richmenu
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 npx wrangler secret put ICAL_ENCRYPTION_KEY
 npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calendar.sql
 npm run deploy
 ```
+
+`migrations/` の SQL は、番号順にそれぞれ1回だけ流します（0001 を流し済みなら 0002 だけ）。
 
 鍵を作り直すと、登録済みのカレンダーURLが読めなくなります。そのときは設定画面でURLを貼り直してください。
 
 ### カレンダーのURL
 
-パソコンの Google カレンダーで「設定」→ 左の一覧でバイト先のカレンダー →「カレンダーの統合」にある「iCal 形式の非公開アドレス」を、シフト収入の設定画面に貼ります。このURLを知っている人は誰でも予定を読めるので、ほかの人に見せたりコミットしたりしないでください。漏れたときは、同じ画面の「リセット」でURLを変えられます。
+パソコンの Google カレンダーで「設定」→ 左の一覧でシフトを入れたカレンダー →「カレンダーの統合」にある「iCal 形式の非公開アドレス」を、シフト収入の設定画面の「シフトのカレンダー」に貼ります。このURLを知っている人は誰でも予定を読めるので、ほかの人に見せたりコミットしたりしないでください。漏れたときは、同じ画面の「リセット」でURLを変えられます。
 
 ## ローカル開発
 
