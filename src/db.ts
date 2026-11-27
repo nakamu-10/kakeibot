@@ -224,9 +224,11 @@ export class Repo {
     return r.results.map(rowToJob);
   }
 
-  /** シフト収入を設定している人（給料日の通知用） */
-  async usersWithShiftJobs(): Promise<string[]> {
-    const r = await this.db.prepare('SELECT DISTINCT user_id FROM shift_jobs').all<{ user_id: string }>();
+  /** バイト先か仕送りを設定している人（給料日・仕送りの日の処理用） */
+  async usersWithShiftIncome(): Promise<string[]> {
+    const r = await this.db
+      .prepare('SELECT user_id FROM shift_jobs UNION SELECT user_id FROM allowances')
+      .all<{ user_id: string }>();
     return r.results.map((x) => x.user_id);
   }
 
@@ -238,13 +240,13 @@ export class Repo {
     return r.results;
   }
 
-  /** 年間の目安ラインと、シフトのカレンダーの非公開URL（暗号化したまま。空 = 未登録） */
-  async shiftSettings(userId: string): Promise<{ wall: number; icalUrlEnc: string }> {
+  /** 年間の目安ライン、シフトのカレンダーの非公開URL（暗号化したまま。空 = 未登録）、家計簿へ自動で記録するか */
+  async shiftSettings(userId: string): Promise<{ wall: number; icalUrlEnc: string; autoRecord: boolean }> {
     const r = await this.db
-      .prepare('SELECT income_wall, ical_url_enc FROM shift_settings WHERE user_id = ?')
+      .prepare('SELECT income_wall, ical_url_enc, auto_record FROM shift_settings WHERE user_id = ?')
       .bind(userId)
-      .first<{ income_wall: number; ical_url_enc: string }>();
-    return { wall: r?.income_wall ?? 0, icalUrlEnc: r?.ical_url_enc ?? '' };
+      .first<{ income_wall: number; ical_url_enc: string; auto_record: number }>();
+    return { wall: r?.income_wall ?? 0, icalUrlEnc: r?.ical_url_enc ?? '', autoRecord: (r?.auto_record ?? 1) === 1 };
   }
 
   /**
@@ -253,7 +255,7 @@ export class Repo {
    */
   async saveShiftSettings(
     userId: string,
-    s: { jobs: Job[]; allowances: Allowance[]; wall: number; icalUrlEnc: string | null },
+    s: { jobs: Job[]; allowances: Allowance[]; wall: number; icalUrlEnc: string | null; autoRecord: boolean },
   ): Promise<void> {
     const keep = s.jobs.map((j) => j.id).filter((id) => id > 0);
     const stmts = [
@@ -303,14 +305,79 @@ export class Repo {
       ),
       this.db
         .prepare(
-          `INSERT INTO shift_settings (user_id, income_wall, ical_url_enc) VALUES (?, ?, COALESCE(?, ''))
+          `INSERT INTO shift_settings (user_id, income_wall, auto_record, ical_url_enc) VALUES (?, ?, ?, COALESCE(?, ''))
            ON CONFLICT (user_id) DO UPDATE SET
              income_wall = excluded.income_wall,
+             auto_record = excluded.auto_record,
              ical_url_enc = COALESCE(?, shift_settings.ical_url_enc)`,
         )
-        .bind(userId, s.wall, s.icalUrlEnc, s.icalUrlEnc),
+        .bind(userId, s.wall, s.autoRecord ? 1 : 0, s.icalUrlEnc, s.icalUrlEnc),
     ];
     await this.db.batch(stmts);
+  }
+
+  /**
+   * 給料日・仕送りの日の見込み額を、収入として家計簿に記録する。
+   * 同じ日の同じ給与・仕送りは一度だけ（手で消したあとも記録し直さない）。記録しなかったら null
+   */
+  async recordPayday(
+    userId: string,
+    r: { kind: 'job' | 'allowance'; refId: number; payDate: string; amount: number; category: string; memo: string },
+  ): Promise<number | null> {
+    const claim = await this.db
+      .prepare(
+        'INSERT OR IGNORE INTO payday_entries (user_id, kind, ref_id, pay_date, expected) VALUES (?, ?, ?, ?, ?)',
+      )
+      .bind(userId, r.kind, r.refId, r.payDate, r.amount)
+      .run();
+    if (claim.meta.changes === 0) return null;
+    await this.ensureCategory(userId, r.category, 'income');
+    const id = await this.addEntry(userId, {
+      type: 'income',
+      category: r.category,
+      amount: r.amount,
+      memo: r.memo,
+      date: r.payDate,
+      source: 'payday',
+    });
+    await this.db
+      .prepare('UPDATE payday_entries SET entry_id = ? WHERE user_id = ? AND kind = ? AND ref_id = ? AND pay_date = ?')
+      .bind(id, userId, r.kind, r.refId, r.payDate)
+      .run();
+    return id;
+  }
+
+  /** カテゴリがなければ末尾に足す（「仕送り」など、あとから増えた初期カテゴリ用） */
+  async ensureCategory(userId: string, name: string, type: EntryType): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT OR IGNORE INTO categories (user_id, name, type, sort, keywords)
+         VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort), -1) + 1 FROM categories WHERE user_id = ?), '')`,
+      )
+      .bind(userId, name, type, userId)
+      .run();
+  }
+
+  // ---------- 「金額を直す」の待ち ----------
+  /** 次に数字だけ送られたら、この記録の金額を直す */
+  async setAmountFix(userId: string, entryId: number, until: Date): Promise<void> {
+    await this.db
+      .prepare('UPDATE users SET fix_entry_id = ?, fix_until = ? WHERE id = ?')
+      .bind(entryId, until.toISOString(), userId)
+      .run();
+  }
+
+  /** 待っている記録の id を取り出して消す。期限切れ・なしなら 0 */
+  async takeAmountFix(userId: string, now: Date): Promise<number> {
+    // 読んでから消す（SQLite の RETURNING は消したあとの値を返すため、batch で順に流す）
+    const [read] = await this.db.batch<{ id: number; until: string }>([
+      this.db.prepare('SELECT fix_entry_id AS id, fix_until AS until FROM users WHERE id = ?').bind(userId),
+      this.db
+        .prepare("UPDATE users SET fix_entry_id = 0, fix_until = '' WHERE id = ? AND fix_entry_id != 0")
+        .bind(userId),
+    ]);
+    const r = read.results[0] as { id: number; until: string } | undefined;
+    return r && r.id && r.until > now.toISOString() ? r.id : 0;
   }
 }
 

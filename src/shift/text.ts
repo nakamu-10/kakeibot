@@ -1,5 +1,5 @@
 import { yen } from '../util';
-import type { Job } from './calc';
+import type { AllowanceIncoming, SalaryIncoming } from './calc';
 import type { ShiftReport } from './report';
 
 /** 'YYYY-MM-DD' → '11/25' */
@@ -30,23 +30,38 @@ export function incomingText(r: ShiftReport): string {
   return lines.join('\n');
 }
 
-/** 給料日の朝の通知。その日に支給される給与がなければ null */
-export function paydayText(r: ShiftReport, today: string): string | null {
-  const pays = r.incoming.flatMap((p) => (p.type === 'salary' && p.payDate === today ? [p] : []));
-  if (!pays.length) return null;
-  const lines = pays.map(
+/** その日に入る給与と仕送り */
+export function incomingOn(
+  r: ShiftReport,
+  date: string,
+): { salaries: SalaryIncoming[]; allowances: AllowanceIncoming[] } {
+  const today = r.incoming.filter((p) => p.payDate === date);
+  return {
+    salaries: today.flatMap((p) => (p.type === 'salary' ? [p] : [])),
+    allowances: today.flatMap((p) => (p.type === 'allowance' ? [p] : [])),
+  };
+}
+
+/** 家計簿のメモ：「珈琲館 10/1〜10/31分」 */
+export const salaryMemo = (p: SalaryIncoming) => `${p.name} ${md(p.periodStart)}〜${md(p.periodEnd)}分`;
+
+/** 給料日の朝の通知。recorded なら家計簿に記録したことも伝える */
+export function paydayText(salaries: SalaryIncoming[], recorded: boolean, errors: string[]): string {
+  const lines = salaries.map(
     (p) => `今日は${p.name}の給料日です。見込み ${yen(p.total)}（${md(p.periodStart)}〜${md(p.periodEnd)}分）`,
   );
-  if (r.errors.length) lines.push('', ...r.errors);
+  if (recorded) {
+    lines.push('', '家計簿に収入として記録しました。実際の金額と違うときは「金額を直す」を押してください。');
+  }
+  if (errors.length) lines.push('', ...errors);
   return lines.join('\n');
 }
 
 /**
- * その日が給料日のバイト先（カレンダーを読む前に、通知が要る人だけに絞るため）。
- * 給料日が31日なら月末、短い月は月末に丸める
+ * 毎月 day 日の支払いが date に当たるか（カレンダーを読む前に、給料日・仕送りの日の人だけに絞るため）。
+ * 31日なら月末、短い月は月末に丸める
  */
-export function jobsPayingOn(jobs: Job[], date: string): Job[] {
+export function paysOn(day: number, date: string): boolean {
   const [y, m, d] = date.split('-').map(Number);
-  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return jobs.filter((j) => Math.min(j.payDay, lastDay) === d);
+  return Math.min(day, new Date(Date.UTC(y, m, 0)).getUTCDate()) === d;
 }

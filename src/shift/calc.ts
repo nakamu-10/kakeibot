@@ -241,6 +241,7 @@ export function payInfo(job: Job, p: { y: number; m: number; d: number }) {
 
 export interface SalaryIncoming {
   type: 'salary';
+  jobId: number;
   name: string;
   payDate: string;
   periodStart: string;
@@ -252,8 +253,9 @@ export interface SalaryIncoming {
   total: number;
 }
 
-interface AllowanceIncoming {
+export interface AllowanceIncoming {
   type: 'allowance';
+  allowanceId: number;
   name: string;
   payDate: string;
   total: number;
@@ -308,6 +310,7 @@ export function buildReport(
         payM: s.payM,
         item: {
           type: 'salary',
+          jobId: s.jobId,
           name: s.jobName,
           payDate: s.payDate,
           periodStart: s.periodStart,
@@ -336,6 +339,7 @@ export function buildReport(
     if (a.amount <= 0) continue;
     incoming.push({
       type: 'allowance',
+      allowanceId: a.id,
       name: a.name,
       payDate: ymdKey(year, month, clampDay(year, month, a.day)),
       total: a.amount,

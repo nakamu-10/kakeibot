@@ -1,8 +1,10 @@
 -- ユーザー（LINEのuserIdがそのまま主キー）
 CREATE TABLE IF NOT EXISTS users (
   id         TEXT PRIMARY KEY,
-  budget     INTEGER NOT NULL DEFAULT 0,      -- 月予算（0 = 未設定）
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  budget       INTEGER NOT NULL DEFAULT 0,    -- 月予算（0 = 未設定）
+  fix_entry_id INTEGER NOT NULL DEFAULT 0,    -- 「金額を直す」を押した記録。次に数字だけ送るとこの記録の金額を直す
+  fix_until    TEXT NOT NULL DEFAULT '',      -- fix_entry_id の期限（ISO 8601）
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- カテゴリ（ユーザーごとに追加・削除・並び替え可能）
@@ -26,7 +28,7 @@ CREATE TABLE IF NOT EXISTS entries (
   memo       TEXT NOT NULL DEFAULT '',
   store      TEXT NOT NULL DEFAULT '',
   date       TEXT NOT NULL,                   -- 'YYYY-MM-DD'（日本時間）
-  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app'
+  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app' | 'payday'
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -68,7 +70,19 @@ CREATE TABLE IF NOT EXISTS allowances (
 CREATE TABLE IF NOT EXISTS shift_settings (
   user_id     TEXT PRIMARY KEY,
   income_wall  INTEGER NOT NULL DEFAULT 0,        -- 年間の目安ライン。0 = 表示しない
-  ical_url_enc TEXT NOT NULL DEFAULT ''          -- シフトのカレンダーの非公開URL（ICAL_ENCRYPTION_KEYで暗号化）。空 = 未登録
+  ical_url_enc TEXT NOT NULL DEFAULT '',         -- シフトのカレンダーの非公開URL（ICAL_ENCRYPTION_KEYで暗号化）。空 = 未登録
+  auto_record  INTEGER NOT NULL DEFAULT 1         -- 給料日・仕送りの日に、見込み額を家計簿へ記録するか
+);
+
+-- 給料日・仕送りの日に家計簿へ記録した印。同じ日を二度記録しない（手で消したあとも記録し直さない）
+CREATE TABLE IF NOT EXISTS payday_entries (
+  user_id  TEXT NOT NULL,
+  kind     TEXT NOT NULL CHECK (kind IN ('job','allowance')),
+  ref_id   INTEGER NOT NULL,                      -- shift_jobs.id または allowances.id
+  pay_date TEXT NOT NULL,                         -- 'YYYY-MM-DD'
+  entry_id INTEGER NOT NULL DEFAULT 0,            -- 記録した entries.id
+  expected INTEGER NOT NULL,                      -- 記録したときの見込み額
+  PRIMARY KEY (user_id, kind, ref_id, pay_date)
 );
 
 CREATE INDEX IF NOT EXISTS idx_shift_jobs_user ON shift_jobs (user_id, sort);

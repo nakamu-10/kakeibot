@@ -1,6 +1,6 @@
 import type { Env, Entry } from './types';
 import { Repo } from './db';
-import { extractDate, parseEntry } from './parse';
+import { extractDate, parseAmountOnly, parseEntry } from './parse';
 import { ReceiptUnavailableError, readReceipt } from './receipt';
 import {
   getContent,
@@ -71,11 +71,23 @@ export async function handleEvent(env: Env, ev: LineEvent): Promise<void> {
 
 type Ctx = { env: Env; repo: Repo; userId: string; replyToken: string };
 
+/** 「金額を直す」を押してから、金額を待つ時間 */
+const FIX_WAIT_MS = 10 * 60_000;
+
 // ---------------- テキスト ----------------
 async function handleText(ctx: Ctx, raw: string): Promise<void> {
   const { env, repo, userId, replyToken } = ctx;
   const t = normalize(raw);
   const today = todayJST();
+
+  // 「金額を直す」を押したあとに数字だけ送られたら、その記録の金額を直す（ほかの入力なら待つのをやめる）
+  const fixId = await repo.takeAmountFix(userId, new Date());
+  const fixAmount = parseAmountOnly(t);
+  if (fixId && fixAmount) {
+    await repo.updateEntry(userId, fixId, { amount: fixAmount });
+    const fixed = await repo.getEntry(userId, fixId);
+    if (fixed) return replyRecorded(ctx, fixed, '金額を直しました ✓');
+  }
 
   if (/^(ヘルプ|使い方|help|\?)$/i.test(t)) return reply(env, replyToken, [text(HELP, defaultQuickReplies(env))]);
   if (/^(今月|集計|今月の合計)$/.test(t)) return replySummary(ctx, monthOf(today));
@@ -191,6 +203,13 @@ async function handlePostback(ctx: Ctx, data: string): Promise<void> {
   const entry = id ? await repo.getEntry(userId, id) : null;
   if (!entry) return reply(env, replyToken, [text('その記録は見つかりませんでした（削除済みかもしれません）。')]);
 
+  if (action === 'fixamt') {
+    await repo.setAmountFix(userId, id, new Date(Date.now() + FIX_WAIT_MS));
+    return reply(env, replyToken, [
+      text(`${describe(entry)}
+正しい金額を数字だけで送ってください（例：6500）。`),
+    ]);
+  }
   if (action === 'undo') {
     await repo.deleteEntry(userId, id);
     return reply(env, replyToken, [text(`取り消しました\n${describe(entry)}`)]);

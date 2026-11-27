@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_CATEGORIES, extractDate, parseEntry } from './parse';
+import { DEFAULT_CATEGORIES, extractDate, parseAmountOnly, parseEntry } from './parse';
 import { extractInteractionText, parseReceiptJson, receiptModels, shouldTryNextModel } from './receipt';
 
 const p = (s: string) => parseEntry(s, DEFAULT_CATEGORIES);
@@ -97,5 +97,14 @@ describe('shouldTryNextModel', () => {
   });
   it('リクエストの誤りやキーの誤りでは次へ進まない', () => {
     expect([400, 401, 403, 404].map(shouldTryNextModel)).toEqual([false, false, false, false]);
+  });
+});
+
+describe('parseAmountOnly', () => {
+  it('金額だけの入力', () => {
+    expect(parseAmountOnly('6500')).toBe(6500);
+    expect(parseAmountOnly('6500円')).toBe(6500);
+    expect(parseAmountOnly('ランチ 800')).toBeNull();
+    expect(parseAmountOnly('0')).toBeNull();
   });
 });

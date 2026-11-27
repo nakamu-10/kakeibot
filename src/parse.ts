@@ -36,7 +36,8 @@ export const DEFAULT_CATEGORIES: CategoryLite[] = [
   { name: 'その他', type: 'expense', keywords: '' },
   { name: '給与', type: 'income', keywords: '給料,バイト代,バイト,給与,賞与,ボーナス' },
   { name: '副業', type: 'income', keywords: '副業,売上,報酬' },
-  { name: 'お小遣い', type: 'income', keywords: '仕送り,小遣い,お年玉' },
+  { name: '仕送り', type: 'income', keywords: '仕送り' },
+  { name: 'お小遣い', type: 'income', keywords: '小遣い,お年玉' },
   { name: 'その他収入', type: 'income', keywords: '臨時収入,返金,メルカリ' },
 ];
 
@@ -140,4 +141,11 @@ export function parseEntry(input: string, categories: CategoryLite[]): ParsedEnt
   }
   const other = pick('expense').find((c) => c.name === 'その他') ?? pick('expense').at(0);
   return { type: 'expense', category: other?.name ?? 'その他', amount, memo: label };
+}
+
+/** 金額だけの入力（「6500」「6,500円」）。normalize 済みの文字列を受け取る */
+export function parseAmountOnly(t: string): number | null {
+  const m = /^(\d{1,9})\s*円?$/.exec(t);
+  const n = m ? Number(m[1]) : 0;
+  return n > 0 ? n : null;
 }
