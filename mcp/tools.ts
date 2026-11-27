@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { groupByParent } from '../src/category';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
-import { monthOf, todayJST } from '../src/util';
+import { monthOf, shiftMonth, todayJST } from '../src/util';
 import type { McpEnv } from './env';
-import { budgetStatus, categoryTree, compareGroups } from './stats';
+import { budgetStatus, categoryTree, compareGroups, usageInsights } from './stats';
 
 const MONTH = z
   .string()
@@ -171,6 +171,44 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         repo.shiftJobs(userId),
       ]);
       return result({ ...report, jobs });
+    },
+  );
+
+  // ---------- アプリを良くする ----------
+  server.registerTool(
+    'get_usage_insights',
+    {
+      title: '使い方の分析',
+      description:
+        'アプリの直しどころを考えるための、使い方のまとめ（直近 months か月）。' +
+        'bySource は記録の付け方（text=トーク、receipt=レシート、app=家計簿の画面、payday=給料日の自動記録、ai=AI から）、' +
+        'other は「その他」になった記録（topMemos はカテゴリのキーワードに足す候補）、edited はあとで直された記録、' +
+        'daysWithoutEntries は記録のない日と曜日、recordedLater はあとからまとめて付けた記録。feedback はこの人が送った要望。' +
+        '改善案は、アプリの設定で直せること（キーワード・子カテゴリなど）と、アプリ自体の直し（要望として send_feedback で残す）に分けて伝える。',
+      inputSchema: z.object({ months: z.number().int().min(1).max(12).default(3) }),
+      annotations: READ_ONLY,
+    },
+    async ({ months }) => {
+      const today = todayJST();
+      const from = `${shiftMonth(monthOf(today), -(months - 1))}-01`;
+      const [rows, feedback] = await Promise.all([repo.entriesForInsights(userId, from), repo.feedback(userId)]);
+      return result({ ...usageInsights(rows, from, today), feedback });
+    },
+  );
+
+  server.registerTool(
+    'send_feedback',
+    {
+      title: 'アプリへの要望を残す',
+      description:
+        '家計簿アプリへの要望や不便なところを、開発者に届くよう残す（非公開）。' +
+        'ユーザーが言ったことを、何に困っていて、どうなるとよいかが分かる1〜3文にまとめて送る。金額や店名などの個人の情報は入れない。',
+      inputSchema: z.object({ body: z.string().min(1).max(1000).describe('要望の文') }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ body }) => {
+      const id = await repo.addFeedback(userId, body.trim());
+      return result({ saved: true, id });
     },
   );
 

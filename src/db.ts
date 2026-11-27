@@ -249,6 +249,44 @@ export class Repo {
     return { entries: list.results as Entry[], ...totals };
   }
 
+  /** 使い方の分析のため、期間の記録を必要な列だけ読む（from 以降、日本時間の 'YYYY-MM-DD'） */
+  async entriesForInsights(
+    userId: string,
+    from: string,
+  ): Promise<
+    { date: string; category: string; memo: string; source: string; edit_count: number; created_at: string }[]
+  > {
+    const r = await this.db
+      .prepare(
+        'SELECT date, category, memo, source, edit_count, created_at FROM entries WHERE user_id = ? AND date >= ?',
+      )
+      .bind(userId, from)
+      .all<{ date: string; category: string; memo: string; source: string; edit_count: number; created_at: string }>();
+    return r.results;
+  }
+
+  // ---------- 要望 ----------
+  async addFeedback(userId: string, body: string): Promise<number> {
+    const r = await this.db
+      .prepare('INSERT INTO feedback (user_id, body) VALUES (?, ?) RETURNING id')
+      .bind(userId, body)
+      .first<{ id: number }>();
+    if (!r) throw new Error('insert failed');
+    return r.id;
+  }
+
+  /** その人が送った要望（新しい順） */
+  async feedback(
+    userId: string,
+    limit = 20,
+  ): Promise<{ id: number; body: string; status: string; created_at: string }[]> {
+    const r = await this.db
+      .prepare('SELECT id, body, status, created_at FROM feedback WHERE user_id = ? ORDER BY id DESC LIMIT ?')
+      .bind(userId, limit)
+      .all<{ id: number; body: string; status: string; created_at: string }>();
+    return r.results;
+  }
+
   async allEntries(userId: string): Promise<Entry[]> {
     const r = await this.db
       .prepare(

@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['node_modules/', '.wrangler/', 'scripts/'] },
+  { ignores: ['node_modules/', '.wrangler/', 'scripts/', 'dist/', 'dist-mcp/'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

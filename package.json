@@ -12,7 +12,7 @@
     "db:init:local": "wrangler d1 execute kakeibo --local --file=schema.sql",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "wrangler deploy --dry-run --outdir dist && wrangler deploy -c mcp/wrangler.toml --dry-run --outdir dist-mcp",
+    "build": "wrangler deploy --dry-run --outdir dist && wrangler deploy -c mcp/wrangler.toml --dry-run --outdir ../dist-mcp",
     "richmenu": "node scripts/richmenu.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
