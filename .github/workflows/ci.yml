@@ -33,6 +33,8 @@ jobs:
       - uses: ./.github/actions/setup
       # 本番には出さず、バンドルできるかだけ確かめる
       - run: npx wrangler deploy --dry-run --outdir dist
+      # 外の AI 向けの MCP サーバー（別の Worker）
+      - run: npx wrangler deploy -c mcp/wrangler.toml --dry-run --outdir dist-mcp
 
   # 秘密が混ざっていないかを履歴ごと調べる。公開リポジトリならpushした時点で誰でも見られる
   secrets:

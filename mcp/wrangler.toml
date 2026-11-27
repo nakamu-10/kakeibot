@@ -1,0 +1,28 @@
+# 外の AI（Claude など）から家計簿を使う MCP サーバー（Issue #10）。ボットとは別の Worker
+# デプロイ: npm run deploy:mcp
+name = "kakeibot-mcp"
+main = "index.ts"
+compatibility_date = "2025-07-01"
+# agents の MCP ハンドラーが node:async_hooks を使う。CIMD（Claude）を受けるには global_fetch_strictly_public が要る
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+# ボットと同じ D1
+[[d1_databases]]
+binding = "DB"
+database_name = "kakeibo"
+database_id = "834047d8-bd46-47a4-843a-a2223f6a2350"
+
+# OAuth のクライアント・トークン（ハッシュと暗号化で保存される）
+# npx wrangler kv namespace create OAUTH_KV で出た id を貼る
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "ここに OAUTH_KV の id を貼る"
+
+[vars]
+PUBLIC_URL = "https://kakeibot-mcp.kocchi.workers.dev"
+# LIFF と同じ LINE ログインチャネル（同じ userId にするため）
+LOGIN_CHANNEL_ID = "2012810933"
+
+# シークレットは以下で登録（tomlには書かない）
+# npx wrangler secret put LOGIN_CHANNEL_SECRET -c mcp/wrangler.toml   (LINE ログインチャネルのチャネルシークレット)
+# npx wrangler secret put ICAL_ENCRYPTION_KEY -c mcp/wrangler.toml    (ボットと同じ値。シフト収入を読むため)

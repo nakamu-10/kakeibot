@@ -117,6 +117,43 @@ npm run deploy
 
 パソコンの Google カレンダーで「設定」→ 左の一覧でシフトを入れたカレンダー →「カレンダーの統合」にある「iCal 形式の非公開アドレス」を、シフト収入の設定画面の「シフトのカレンダー」に貼ります。このURLを知っている人は誰でも予定を読めるので、ほかの人に見せたりコミットしたりしないでください。漏れたときは、同じ画面の「リセット」でURLを変えられます。
 
+## 外の AI から使う（MCP）
+
+Claude などの AI アプリに家計簿をつなぐと、チャットで「今月コンビニでいくら使った？」「先月と比べて何が増えた？」「このペースだと月末いくら？」のように聞けます。ボットとは別の Worker（`mcp/`、名前は `kakeibot-mcp`）で動きます。今は読み取りだけです（Issue #10）。
+
+### 使い始めるとき（1回だけ）
+
+1. KV を作り、出てきた `id` を `mcp/wrangler.toml` の `OAUTH_KV` に貼る
+   ```powershell
+   npx wrangler kv namespace create OAUTH_KV
+   ```
+2. LINE ログインチャネルの「LINEログイン設定」→「コールバックURL」に、改行して `https://kakeibot-mcp.<サブドメイン>.workers.dev/callback` を足す（LIFF の設定はそのまま）
+3. `mcp/wrangler.toml` の `PUBLIC_URL` を、この Worker の URL にする
+4. シークレットを登録してデプロイする
+   ```powershell
+   npx wrangler secret put LOGIN_CHANNEL_SECRET -c mcp/wrangler.toml   # LINE ログインチャネルの「チャネルシークレット」
+   npx wrangler secret put ICAL_ENCRYPTION_KEY -c mcp/wrangler.toml    # ボットと同じ値
+   npm run deploy:mcp
+   ```
+
+LINE ログインチャネルが「開発中」の間は、チャネルの管理者とテスターしかログインできません。ほかの人にも使ってもらうときは「公開」にします（公開すると開発中には戻せません）。
+
+### AI アプリに登録する
+
+- Claude：「設定」→「コネクタ」→「カスタムコネクタを追加」に `https://kakeibot-mcp.<サブドメイン>.workers.dev/mcp` を入れる。つなぐと許可の画面と LINE ログインが出る
+- Gemini・Muse：設定のカスタムアプリ・コネクタの追加に、同じ URL を入れる（地域やアカウントによっては、その項目がないことがある）
+
+### できること（読み取り）
+
+| ツール              | 内容                                                     |
+| ------------------- | -------------------------------------------------------- |
+| `list_categories`   | カテゴリの一覧（親子つき）                               |
+| `search_entries`    | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき） |
+| `get_summary`       | 月の収支とカテゴリ別の支出・割合                         |
+| `compare_months`    | 2つの月のカテゴリ別の差                                  |
+| `get_budget_status` | 予算に対するペースと、月末の見込み                       |
+| `get_shift_income`  | シフト収入の入金予定・年間の給与・バイト先の設定         |
+
 ## ローカル開発
 
 ```bash
@@ -125,6 +162,7 @@ npm run db:init:local
 npm run dev
 node scripts/preview.mjs          # LIFF画面を架空のデータで開く（http://localhost:8790/app）
 npm test                          # 入力解析・日付・レシートJSONのテスト
+npm run dev:mcp                   # MCP サーバー（http://localhost:8791）。mcp/.dev.vars に LOGIN_CHANNEL_SECRET などを書く
 RECEIPT_IMAGE=./receipt.jpg npm run try:receipt   # 本物のGemini APIでレシート画像を読む（.dev.vars の GEMINI_API_KEY を使う）
 ```
 
@@ -146,6 +184,7 @@ src/
 migrations/ 既存DB向けの移行SQL
 schema.sql    テーブル定義
 scripts/      リッチメニュー作成スクリプトと画像
+mcp/          外の AI 向けの MCP サーバー（別の Worker。mcp/wrangler.toml）
 ```
 
 ## 次にやること（v0.2 候補）

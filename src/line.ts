@@ -101,7 +101,7 @@ export function qrUri(label: string, uri: string): LineMessage {
 }
 
 /** LIFFのIDトークンを検証して userId を返す */
-export async function verifyIdToken(env: Env, idToken: string): Promise<string | null> {
+export async function verifyIdToken(env: Pick<Env, 'LOGIN_CHANNEL_ID'>, idToken: string): Promise<string | null> {
   const res = await fetch('https://api.line.me/oauth2/v2.1/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
