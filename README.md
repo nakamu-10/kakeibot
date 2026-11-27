@@ -79,6 +79,7 @@ LINE_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=yyy npm run richmenu
 - 終日の予定は数えません。祝日は [holidays-jp](https://holidays-jp.github.io/) から取ります
 - トークで「収入」と送ると、今月の入金予定を返します
 - 給料日の朝8時に「今日は◯◯の給料日です。見込み ◯円」と届きます。LINE の無料プランはこちらから送れる通数に月の上限（200通）があり、この通知もそれに数えます
+- 給料日・仕送りの日の朝に、見込み額を家計簿に収入（給与・仕送り）として記録します。実際の金額と違うときは、通知の「金額を直す」を押してから数字だけ送るか、家計簿の履歴で直します。記録しないようにするには、シフト収入の設定でオフにします
 
 ### 使い始めるとき（1回だけ）
 
@@ -90,10 +91,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 npx wrangler secret put ICAL_ENCRYPTION_KEY
 npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calendar.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sql
 npm run deploy
 ```
 
-`migrations/` の SQL は、番号順にそれぞれ1回だけ流します（0001 を流し済みなら 0002 だけ）。
+`migrations/` の SQL は、番号順にそれぞれ1回だけ流します（流し済みのものは飛ばす）。
 
 鍵を作り直すと、登録済みのカレンダーURLが読めなくなります。そのときは設定画面でURLを貼り直してください。
 
