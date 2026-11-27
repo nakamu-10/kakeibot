@@ -13,7 +13,8 @@ Cloudflare Workers + D1 で動き、グラフ・履歴・設定はLIFF画面（L
 | まとめて記録 | 改行して1行に1件ずつ送ると、まとめて記録（日付だけの行は次の行からの日付）                                                                             |
 | レシート読取 | 写真を送るとAIが店名・合計・日付・カテゴリを判定して記録                                                                                               |
 | 記録後の操作 | クイックリプライで「取り消す」「カテゴリ変更」「今月」「レシート撮影」「グラフ」                                                                       |
-| コマンド     | 今月 / 先月 / 予算 50000 / 予算 / 取り消し / カテゴリ / グラフ / 収入 / ヘルプ                                                                         |
+| コマンド     | 今月 / 先月 / 予算 50000 / 予算 / 取り消し / カテゴリ / グラフ / 収入 / 通知オン / 通知オフ / ヘルプ                                                   |
+| 記録忘れ通知 | オンにすると、その日まだ記録していない夜9時に LINE で知らせる（最初はオフ）                                                                            |
 | LIFF画面     | 月の収支・予算残り、日別グラフ、カテゴリ別グラフ、6か月推移、月比較、履歴の追加・編集・削除、予算設定、カテゴリ追加・編集・並び替え・削除、CSV書き出し |
 | シフト収入   | Google カレンダーのシフトから、給料日ごとの入金予定・月の勤務・年間の支給額を計算（LIFF の `/app/shift`）                                              |
 
@@ -61,6 +62,18 @@ npx wrangler secret put GEMINI_API_KEY
 npm run deploy
 ```
 
+### 既存のDBを新しい版に合わせる
+
+前の版から使っている DB には、`migrations/` の SQL を番号順に1回ずつ流してからデプロイします（流し済みのものは飛ばす）。新しく `npm run db:init` で作った DB には要りません。
+
+```powershell
+npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calendar.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0004_remind.sql
+npm run deploy
+```
+
 ### 4. 接続
 
 - Messaging APIチャネルの「Messaging API設定」で Webhook URL に `https://<デプロイ先>.workers.dev/webhook` を設定して「検証」し、「Webhookの利用」をオン
@@ -90,13 +103,10 @@ LINE_CHANNEL_ACCESS_TOKEN=xxx LIFF_ID=yyy npm run richmenu
 # 鍵を作る（表示された文字列を次のコマンドで貼る。ほかの人に見せない・どこにも保存しない）
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 npx wrangler secret put ICAL_ENCRYPTION_KEY
-npx wrangler d1 execute kakeibo --remote --file=migrations/0001_shift_income.sql
-npx wrangler d1 execute kakeibo --remote --file=migrations/0002_shift_one_calendar.sql
-npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sql
 npm run deploy
 ```
 
-`migrations/` の SQL は、番号順にそれぞれ1回だけ流します（流し済みのものは飛ばす）。
+既存のDBには、先に「既存のDBを新しい版に合わせる」の SQL を流しておきます。
 
 鍵を作り直すと、登録済みのカレンダーURLが読めなくなります。そのときは設定画面でURLを貼り直してください。
 
@@ -138,4 +148,3 @@ scripts/      リッチメニュー作成スクリプトと画像
 - LINEグループでの共有家計簿・割り勘精算（均等割り・傾斜割り）
 - 買い物メモ（チェックリスト共有）
 - PayPay取引履歴CSVの取り込み
-- 記録忘れ通知（Cron Triggers で夜に未記録の人へプッシュ）
