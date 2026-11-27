@@ -5,6 +5,9 @@ export interface CategoryLite {
   name: string;
   type: EntryType;
   keywords: string;
+  /** DB のカテゴリにだけある（初期カテゴリにはない） */
+  id?: number;
+  parentId?: number;
 }
 
 /** 新規ユーザーに入れる初期カテゴリ */
@@ -118,6 +121,9 @@ export function parseEntry(input: string, categories: CategoryLite[]): ParsedEnt
   const [first, ...rest] = label.split(/\s+/);
   const byName = pool.find((c) => c.name === first);
   if (byName) {
+    // 「日用品 服 3000」：親の次に子の名前があれば子にする
+    const child = byName.id ? pool.find((c) => c.parentId === byName.id && c.name === rest[0]) : undefined;
+    if (child) return { type: child.type, category: child.name, amount, memo: rest.slice(1).join(' ') };
     return { type: byName.type, category: byName.name, amount, memo: rest.join(' ') };
   }
 
@@ -129,7 +135,10 @@ export function parseEntry(input: string, categories: CategoryLite[]): ParsedEnt
       .split(',')
       .map((k) => k.trim().toLowerCase())
       .filter(Boolean)) {
-      if (lower.includes(kw) && (!best || kw.length > best.len)) best = { c, len: kw.length };
+      if (!lower.includes(kw)) continue;
+      // 長いキーワードを優先。同じ長さなら、子カテゴリ（より細かい方）を優先
+      const better = !best || kw.length > best.len || (kw.length === best.len && !!c.parentId && !best.c.parentId);
+      if (better) best = { c, len: kw.length };
     }
   }
   if (best) return { type: best.c.type, category: best.c.name, amount, memo: label };

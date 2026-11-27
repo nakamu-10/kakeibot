@@ -17,6 +17,8 @@ export interface Category {
   type: EntryType;
   sort: number;
   keywords: string;
+  /** 親カテゴリの id。0 なら一番上の段 */
+  parentId: number;
 }
 
 export interface Entry {

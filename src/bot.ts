@@ -1,6 +1,7 @@
 import type { Category, Env, Entry } from './types';
 import { Repo } from './db';
 import { extractDate, parseAmountOnly, parseEntry, parseLines } from './parse';
+import { categoryTreeText, groupByParent, parentName } from './category';
 import { ReceiptUnavailableError, readReceipt } from './receipt';
 import {
   getContent,
@@ -119,15 +120,13 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   }
   if (/^カテゴリ$/.test(t)) {
     const cats = await repo.categories(userId);
-    const ex = cats
-      .filter((c) => c.type === 'expense')
-      .map((c) => c.name)
-      .join(' / ');
-    const inc = cats
-      .filter((c) => c.type === 'income')
-      .map((c) => c.name)
-      .join(' / ');
-    return reply(env, replyToken, [text(`支出: ${ex}\n収入: ${inc}\n\n追加・並び替えは「グラフ」→設定から`)]);
+    const ex = categoryTreeText(cats.filter((c) => c.type === 'expense'));
+    const inc = categoryTreeText(cats.filter((c) => c.type === 'income'));
+    return reply(env, replyToken, [
+      text(
+        `支出: ${ex}\n収入: ${inc}\n\n「日用品 服 3000」のように親と子を続けても記録できます。\n追加・並び替え・親子の設定は「グラフ」→設定から`,
+      ),
+    ]);
   }
   const b = t.match(/^予算\s*(\d+)?\s*円?$/);
   if (b) {
@@ -304,7 +303,14 @@ async function replyRecorded(ctx: Ctx, e: Entry, title = '記録しました ✓
 
   const lines = [title, describe(e)];
   if (e.type === 'expense') {
-    lines.push('', `${label}の${e.category} ${yen(s.byCategory[e.category] ?? 0)}`, `${label}の支出 ${yen(s.expense)}`);
+    lines.push('', `${label}の${e.category} ${yen(s.byCategory[e.category] ?? 0)}`);
+    // 子カテゴリなら、親の合計も出す
+    const cats = await repo.categories(userId);
+    const groupName = parentName(cats, e.category) ?? e.category;
+    const group = groupByParent(s.byCategory, cats).find((g) => g.name === groupName);
+    // 子カテゴリの記録か、子を持つ親への記録なら、親の合計も出す
+    if (group?.children.length) lines.push(`${label}の${groupName}（合計） ${yen(group.total)}`);
+    lines.push(`${label}の支出 ${yen(s.expense)}`);
     if (budget) lines.push(`予算残り ${yen(budget - s.expense)}`);
   } else {
     lines.push('', `${label}の収入 ${yen(s.income)}`);
@@ -336,10 +342,13 @@ async function replySummary(ctx: Ctx, month: string): Promise<void> {
   if (budget) {
     lines.push(`予算残り ${yen(budget - s.expense)}（${Math.round((s.expense / budget) * 100)}% 使用）`);
   }
-  const cats = Object.entries(s.byCategory).sort((a, b) => b[1] - a[1]);
-  if (cats.length) {
+  const groups = groupByParent(s.byCategory, await repo.categories(userId));
+  if (groups.length) {
     lines.push('', '― カテゴリ別 ―');
-    for (const [c, v] of cats) lines.push(`${c} ${yen(v)}`);
+    for (const g of groups) {
+      lines.push(`${g.name} ${yen(g.total)}`);
+      for (const c of g.children) lines.push(`  ${c.name} ${yen(c.amount)}`);
+    }
   }
   await reply(env, replyToken, [text(lines.join('\n'), [qrMessage('先月'), qrUri('グラフで見る', liffUrl(env))])]);
 }

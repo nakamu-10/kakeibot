@@ -340,6 +340,7 @@
               <option value="expense">支出</option>
               <option value="income">収入</option>
             </select>
+            <select id="nc-parent" class="full"></select>
             <input id="nc-kw" class="full" placeholder="自動判定キーワード（カンマ区切り・任意）" />
             <button class="btn full" id="nc-add">追加</button>
           </div>
@@ -467,23 +468,27 @@
         });
 
         // カテゴリ別
-        const cats = Object.entries(data.byCategory).sort((a, b) => b[1] - a[1]);
+        const groups = data.groups;
         drawChart('cat', $('c-cat'), {
           type: 'doughnut',
           data: {
-            labels: cats.map((c) => c[0]),
-            datasets: [{ data: cats.map((c) => c[1]), backgroundColor: PALETTE, borderWidth: 1 }],
+            labels: groups.map((g) => g.name),
+            datasets: [{ data: groups.map((g) => g.total), backgroundColor: PALETTE, borderWidth: 1 }],
           },
           options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false } } },
         });
-        $('cat-table').innerHTML = cats.length
-          ? cats
+        $('cat-table').innerHTML = groups.length
+          ? groups
               .map(
-                (
-                  [c, v],
-                  i,
-                ) => `<tr><td><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span></td><td>${esc(c)}</td>
-        <td class="num muted">${Math.round((v / data.expense) * 100)}%</td><td class="num">${yen(v)}</td></tr>`,
+                (g, i) =>
+                  `<tr><td><span class="dot" style="background:${PALETTE[i % PALETTE.length]}"></span></td><td>${esc(g.name)}</td>
+        <td class="num muted">${Math.round((g.total / data.expense) * 100)}%</td><td class="num">${yen(g.total)}</td></tr>` +
+                  g.children
+                    .map(
+                      (c) =>
+                        `<tr class="muted"><td></td><td>└ ${esc(c.name)}</td><td></td><td class="num">${yen(c.amount)}</td></tr>`,
+                    )
+                    .join(''),
               )
               .join('')
           : '<tr><td class="muted">まだ記録がありません</td></tr>';
@@ -544,22 +549,39 @@
         for (const type of ['expense', 'income']) {
           const list = data.categories.filter((c) => c.type === type);
           $('cats-' + type).innerHTML = list
-            .map(
-              (c, i) => `<div class="cat-item">
-      <span>${esc(c.name)}<br><span class="muted">${esc(c.keywords || '')}</span></span>
-      <button onclick="moveCat('${type}', ${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
-      <button onclick="moveCat('${type}', ${i}, 1)" ${i === list.length - 1 ? 'disabled' : ''}>↓</button>
+            .map((c) => {
+              const sibs = siblings(c);
+              const i = sibs.indexOf(c);
+              return `<div class="cat-item" ${c.parentId ? 'style="padding-left: 18px"' : ''}>
+      <span>${c.parentId ? '└ ' : ''}${esc(c.name)}<br><span class="muted">${esc(c.keywords || '')}</span></span>
+      <button onclick="moveCat(${c.id}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+      <button onclick="moveCat(${c.id}, 1)" ${i === sibs.length - 1 ? 'disabled' : ''}>↓</button>
       <button onclick="editCat(${c.id})">編集</button>
-      <button onclick="delCat(${c.id})">削除</button></div>`,
-            )
+      <button onclick="delCat(${c.id})">削除</button></div>`;
+            })
             .join('');
         }
+        fillParentSelect();
+      }
+
+      /** 同じ親を持つカテゴリ（並び替えはこの中で） */
+      const siblings = (c) => data.categories.filter((x) => x.type === c.type && x.parentId === c.parentId);
+      const parentOf = (c) => data.categories.find((x) => x.id === c.parentId);
+
+      function fillParentSelect() {
+        const tops = data.categories.filter((c) => c.type === $('nc-type').value && !c.parentId);
+        $('nc-parent').innerHTML =
+          '<option value="0">親カテゴリなし（一番上の段）</option>' +
+          tops.map((c) => `<option value="${c.id}">${esc(c.name)} の下に作る</option>`).join('');
       }
 
       function fillCatSelect(sel, type, selected) {
         sel.innerHTML = data.categories
           .filter((c) => c.type === type)
-          .map((c) => `<option ${c.name === selected ? 'selected' : ''}>${esc(c.name)}</option>`)
+          .map((c) => {
+            const p = parentOf(c);
+            return `<option value="${esc(c.name)}" ${c.name === selected ? 'selected' : ''}>${p ? esc(p.name) + ' › ' : ''}${esc(c.name)}</option>`;
+          })
           .join('');
       }
 
@@ -672,8 +694,10 @@
         alert('予算を保存しました');
       };
 
-      window.moveCat = async (type, i, d) => {
-        const list = data.categories.filter((c) => c.type === type);
+      window.moveCat = async (id, d) => {
+        const c = data.categories.find((x) => x.id === id);
+        const list = siblings(c);
+        const i = list.indexOf(c);
         [list[i], list[i + d]] = [list[i + d], list[i]];
         await api('/categories/order', { method: 'PUT', body: JSON.stringify({ ids: list.map((c) => c.id) }) });
         await load();
@@ -684,21 +708,35 @@
         if (name === null) return;
         const keywords = prompt('自動判定キーワード（カンマ区切り）', c.keywords);
         if (keywords === null) return;
-        await api('/categories/' + id, { method: 'PATCH', body: JSON.stringify({ name, keywords }) });
+        const parentInput = prompt('親カテゴリの名前（空なら一番上の段）', parentOf(c)?.name ?? '');
+        if (parentInput === null) return;
+        const parent = data.categories.find((x) => x.name === parentInput.trim() && x.type === c.type);
+        if (parentInput.trim() && !parent) return alert(`「${parentInput.trim()}」というカテゴリはありません`);
+        await api('/categories/' + id, {
+          method: 'PATCH',
+          body: JSON.stringify({ name, keywords, parentId: parent ? parent.id : 0 }),
+        });
         await load();
       };
       window.delCat = async (id) => {
         const c = data.categories.find((x) => x.id === id);
-        if (!confirm(`「${c.name}」を削除しますか？（過去の記録は残ります）`)) return;
+        const note = data.categories.some((x) => x.parentId === c.id) ? '子カテゴリは一番上の段に移ります。' : '';
+        if (!confirm(`「${c.name}」を削除しますか？（過去の記録は残ります）${note}`)) return;
         await api('/categories/' + id, { method: 'DELETE' });
         await load();
       };
+      $('nc-type').onchange = fillParentSelect;
       $('nc-add').onclick = async () => {
         const name = $('nc-name').value.trim();
         if (!name) return;
         await api('/categories', {
           method: 'POST',
-          body: JSON.stringify({ name, type: $('nc-type').value, keywords: $('nc-kw').value }),
+          body: JSON.stringify({
+            name,
+            type: $('nc-type').value,
+            keywords: $('nc-kw').value,
+            parentId: Number($('nc-parent').value),
+          }),
         });
         $('nc-name').value = '';
         $('nc-kw').value = '';
