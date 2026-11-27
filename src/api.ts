@@ -78,6 +78,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     if (method === 'DELETE') return json({ ok: await repo.deleteEntry(userId, id) });
     if (method === 'PATCH') {
       await repo.updateEntry(userId, id, {
+        type: body.type === 'income' || body.type === 'expense' ? body.type : undefined,
         category: typeof body.category === 'string' ? body.category : undefined,
         amount: body.amount != null ? Math.round(Number(body.amount)) : undefined,
         memo: typeof body.memo === 'string' ? body.memo : undefined,

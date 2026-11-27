@@ -9,6 +9,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - 確認：`npm run lint`、`npm run typecheck`、`npm test`、`npm run knip`
 - 整形：`npm run format`
 - Webhookを手で送る：`node scripts/webhook.mjs "ランチ 800"`（`npm run dev` 中に）
+- LIFF画面を手元で見る：`node scripts/preview.mjs` → `http://localhost:8790/app`（架空のデータ。LINE ログインは要らない）
 - ローカルDBを見る：`npx wrangler d1 execute kakeibo --local --command "SELECT * FROM entries"`
 
 ## 構成
@@ -32,6 +33,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
   - `api.ts`：`/api/shift/*`。`holidays.ts`：祝日（holidays-jp）
 - `src/shift.html`：シフト収入のLIFF画面（`/app/shift`）
 - `src/app.html`：LIFF画面（素のJS + Chart.js、1ファイル）
+- `src/ui.css`：LIFF画面で共通の見た目（色・カード・ボタン・入力欄・ナビ）。`/app/ui.css` で配る
 - `schema.sql`：テーブル定義。変えたら既存DB向けの移行SQLも `migrations/` に置く
 
 ## 開発ルール
@@ -44,7 +46,10 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - 設計上の決定は`docs/adr/`に1件ずつ残す
 - 日付は日本時間の `'YYYY-MM-DD'` 文字列で扱う（`util.ts` の `todayJST`）。金額は円の整数
 - ユーザーへの返信文は日本語・敬体・絵文字なし（記録時の「✓」だけ使う）
-- LIFF画面は落ち着いた表中心のデザイン。アイコン多用・巨大な数字・角丸カードの多用はしない
+- LIFF画面は LINE になじむ、大きめで角の丸い柔らかい見た目（ADR 0009）。色は `src/ui.css` の変数だけを使う。アイコンは多用しない
+- 入力欄の文字は 16px 以上（iPhone が入力のたびに拡大しないように）。押せるものは高さ 44px 以上
+- ブラウザの `alert`・`confirm`・`prompt` は使わない。知らせは `toast`、入力は下から出る入力欄、削除は2回押す
+- 画面を変えたら `node scripts/preview.mjs` で、スマホの幅で見て確かめる
 
 ## この環境での確かめ方
 

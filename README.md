@@ -123,6 +123,7 @@ npm run deploy
 cp .dev.vars.example .dev.vars   # 中身を埋める
 npm run db:init:local
 npm run dev
+node scripts/preview.mjs          # LIFF画面を架空のデータで開く（http://localhost:8790/app）
 npm test                          # 入力解析・日付・レシートJSONのテスト
 RECEIPT_IMAGE=./receipt.jpg npm run try:receipt   # 本物のGemini APIでレシート画像を読む（.dev.vars の GEMINI_API_KEY を使う）
 ```
@@ -139,6 +140,7 @@ src/
   api.ts      LIFF画面用API（IDトークンで本人確認）
   line.ts     署名検証・返信・画像取得・クイックリプライ
   app.html    LIFF画面（Chart.js）
+  ui.css      LIFF画面で共通の見た目
   shift.html  シフト収入のLIFF画面
   shift/      シフト収入（計算・iCal読み込み・URLの暗号化・祝日・API）
 migrations/ 既存DB向けの移行SQL

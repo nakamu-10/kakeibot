@@ -4,6 +4,7 @@ import { handleEvent } from './bot';
 import { handleApi } from './api';
 import appHtml from './app.html';
 import shiftHtml from './shift.html';
+import uiCss from './ui.css';
 import { runPaydays } from './shift/payday';
 import { runReminders } from './remind';
 
@@ -35,6 +36,13 @@ export default {
     if (url.pathname === '/' || url.pathname === '/app') {
       return new Response(appHtml.replace('__LIFF_ID__', env.LIFF_ID), {
         headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
+
+    // LIFF 画面の共通の見た目
+    if (url.pathname === '/app/ui.css') {
+      return new Response(uiCss, {
+        headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=300' },
       });
     }
 
