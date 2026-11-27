@@ -2,6 +2,7 @@ import type { Env, EntryType } from './types';
 import { Repo } from './db';
 import { verifyIdToken } from './line';
 import { json, monthOf, todayJST } from './util';
+import { groupByParent, orderCategories, parentError, parentName } from './category';
 import { handleShiftApi } from './shift/api';
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -30,7 +31,16 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       repo.categories(userId),
       repo.remind(userId),
     ]);
-    return json({ ...summary, trend, budget, categories, remind, today: todayJST() });
+    return json({
+      ...summary,
+      // 親でまとめたカテゴリ別（画面で同じ計算を持たないように、ここで作る）
+      groups: groupByParent(summary.byCategory, categories),
+      trend,
+      budget,
+      categories: orderCategories(categories),
+      remind,
+      today: todayJST(),
+    });
   }
 
   // 予算
@@ -82,8 +92,11 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const name = str(body.name).trim().slice(0, 20);
     const type: EntryType = body.type === 'income' ? 'income' : 'expense';
     if (!name) return json({ error: 'invalid' }, 400);
+    const parentId = Number(body.parentId) || 0;
+    const error = parentError(await repo.categories(userId), { id: 0, type }, parentId);
+    if (error) return json({ error }, 400);
     try {
-      await repo.addCategory(userId, name, type, str(body.keywords));
+      await repo.addCategory(userId, name, type, str(body.keywords), parentId);
     } catch {
       return json({ error: '同じ名前のカテゴリがあります' }, 409);
     }
@@ -102,7 +115,16 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       return json({ ok: true });
     }
     if (method === 'PATCH') {
+      const parentId = body.parentId == null ? undefined : Number(body.parentId) || 0;
+      if (parentId !== undefined) {
+        const cats = await repo.categories(userId);
+        const self = cats.find((c) => c.id === id);
+        if (!self) return json({ error: 'not found' }, 404);
+        const error = parentError(cats, self, parentId);
+        if (error) return json({ error }, 400);
+      }
       await repo.updateCategory(userId, id, {
+        parentId,
         name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 20) : undefined,
         keywords: typeof body.keywords === 'string' ? body.keywords : undefined,
       });
@@ -112,13 +134,22 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
 
   // CSVエクスポート（Excel で文字化けしないよう BOM 付き）
   if (method === 'GET' && path === '/export.csv') {
-    const rows = await repo.allEntries(userId);
+    const [rows, cats] = await Promise.all([repo.allEntries(userId), repo.categories(userId)]);
     const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
     const csv =
-      '﻿日付,種別,カテゴリ,金額,店名,メモ,入力方法\n' +
+      '﻿日付,種別,親カテゴリ,カテゴリ,金額,店名,メモ,入力方法\n' +
       rows
         .map((r) =>
-          [r.date, r.type === 'income' ? '収入' : '支出', r.category, r.amount, r.store, r.memo, r.source]
+          [
+            r.date,
+            r.type === 'income' ? '収入' : '支出',
+            parentName(cats, r.category) ?? '',
+            r.category,
+            r.amount,
+            r.store,
+            r.memo,
+            r.source,
+          ]
             .map(esc)
             .join(','),
         )

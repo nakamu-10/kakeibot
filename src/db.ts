@@ -24,24 +24,30 @@ export class Repo {
   // ---------- カテゴリ ----------
   async categories(userId: string): Promise<Category[]> {
     const r = await this.db
-      .prepare('SELECT id, name, type, sort, keywords FROM categories WHERE user_id = ? ORDER BY type, sort, id')
+      .prepare(
+        'SELECT id, name, type, sort, keywords, parent_id AS parentId FROM categories WHERE user_id = ? ORDER BY type, sort, id',
+      )
       .bind(userId)
       .all<Category>();
     return r.results;
   }
 
-  async addCategory(userId: string, name: string, type: EntryType, keywords = ''): Promise<void> {
+  async addCategory(userId: string, name: string, type: EntryType, keywords = '', parentId = 0): Promise<void> {
     const max = await this.db
       .prepare('SELECT COALESCE(MAX(sort), -1) AS m FROM categories WHERE user_id = ?')
       .bind(userId)
       .first<{ m: number }>();
     await this.db
-      .prepare('INSERT INTO categories (user_id, name, type, sort, keywords) VALUES (?, ?, ?, ?, ?)')
-      .bind(userId, name, type, (max?.m ?? -1) + 1, keywords)
+      .prepare('INSERT INTO categories (user_id, name, type, sort, keywords, parent_id) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(userId, name, type, (max?.m ?? -1) + 1, keywords, parentId)
       .run();
   }
 
-  async updateCategory(userId: string, id: number, fields: { name?: string; keywords?: string }): Promise<void> {
+  async updateCategory(
+    userId: string,
+    id: number,
+    fields: { name?: string; keywords?: string; parentId?: number },
+  ): Promise<void> {
     const cur = await this.db
       .prepare('SELECT name FROM categories WHERE id = ? AND user_id = ?')
       .bind(id, userId)
@@ -50,9 +56,10 @@ export class Repo {
     const stmts = [
       this.db
         .prepare(
-          'UPDATE categories SET name = COALESCE(?, name), keywords = COALESCE(?, keywords) WHERE id = ? AND user_id = ?',
+          `UPDATE categories SET name = COALESCE(?, name), keywords = COALESCE(?, keywords),
+             parent_id = COALESCE(?, parent_id) WHERE id = ? AND user_id = ?`,
         )
-        .bind(fields.name ?? null, fields.keywords ?? null, id, userId),
+        .bind(fields.name ?? null, fields.keywords ?? null, fields.parentId ?? null, id, userId),
     ];
     // 名前を変えたら過去の記録も付け替える
     if (fields.name && fields.name !== cur.name) {
@@ -65,8 +72,12 @@ export class Repo {
     await this.db.batch(stmts);
   }
 
+  /** 消したカテゴリの子は、一番上の段に上げる（記録はそのまま残る） */
   async deleteCategory(userId: string, id: number): Promise<void> {
-    await this.db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').bind(id, userId).run();
+    await this.db.batch([
+      this.db.prepare('UPDATE categories SET parent_id = 0 WHERE parent_id = ? AND user_id = ?').bind(id, userId),
+      this.db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').bind(id, userId),
+    ]);
   }
 
   async reorderCategories(userId: string, ids: number[]): Promise<void> {
