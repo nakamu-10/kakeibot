@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "dev:mcp": "wrangler dev -c mcp/wrangler.toml --port 8791",
+    "deploy:mcp": "wrangler deploy -c mcp/wrangler.toml",
     "db:init": "wrangler d1 execute kakeibo --remote --file=schema.sql",
     "db:init:local": "wrangler d1 execute kakeibo --local --file=schema.sql",
     "test": "vitest run",
@@ -32,6 +34,10 @@
     "wrangler": "3.114.17"
   },
   "dependencies": {
-    "ical.js": "2.2.1"
+    "@cloudflare/workers-oauth-provider": "1.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "agents": "0.34.1",
+    "ical.js": "2.2.1",
+    "zod": "4.6.7"
   }
 }
