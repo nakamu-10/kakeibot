@@ -4,6 +4,7 @@ import { handleEvent } from './bot';
 import { handleApi } from './api';
 import appHtml from './app.html';
 import shiftHtml from './shift.html';
+import { notifyPaydays } from './shift/notify';
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -46,5 +47,10 @@ export default {
     if (url.pathname.startsWith('/api/')) return handleApi(req, env, url);
 
     return new Response('not found', { status: 404 });
+  },
+
+  // Cron Trigger（wrangler.toml）。毎朝8時（日本時間）に給料日の通知を送る
+  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
+    ctx.waitUntil(notifyPaydays(env, new Date()));
   },
 };

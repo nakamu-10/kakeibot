@@ -224,6 +224,12 @@ export class Repo {
     return r.results.map(rowToJob);
   }
 
+  /** シフト収入を設定している人（給料日の通知用） */
+  async usersWithShiftJobs(): Promise<string[]> {
+    const r = await this.db.prepare('SELECT DISTINCT user_id FROM shift_jobs').all<{ user_id: string }>();
+    return r.results.map((x) => x.user_id);
+  }
+
   async allowances(userId: string): Promise<Allowance[]> {
     const r = await this.db
       .prepare('SELECT id, name, amount, day FROM allowances WHERE user_id = ? ORDER BY sort, id')

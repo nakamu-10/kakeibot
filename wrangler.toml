@@ -8,6 +8,10 @@ type = "Text"
 globs = ["**/*.html"]
 fallthrough = true
 
+# 毎朝8時（日本時間）に給料日の通知を送る。cron は UTC で書く
+[triggers]
+crons = ["0 23 * * *"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "kakeibo"
