@@ -23,13 +23,14 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories] = await Promise.all([
+    const [summary, trend, budget, categories, remind] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
       repo.budget(userId),
       repo.categories(userId),
+      repo.remind(userId),
     ]);
-    return json({ ...summary, trend, budget, categories, today: todayJST() });
+    return json({ ...summary, trend, budget, categories, remind, today: todayJST() });
   }
 
   // 予算
@@ -37,6 +38,12 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const amount = Math.max(0, Math.round(Number(body.amount) || 0));
     await repo.setBudget(userId, amount);
     return json({ ok: true, budget: amount });
+  }
+
+  // 記録忘れ通知
+  if (method === 'PUT' && path === '/remind') {
+    await repo.setRemind(userId, body.on === true);
+    return json({ ok: true, remind: body.on === true });
   }
 
   // 記録の追加・編集・削除

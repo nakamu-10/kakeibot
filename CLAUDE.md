@@ -19,7 +19,8 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/receipt.ts`：レシート画像 → Gemini → JSON
 - `src/db.ts`：D1へのアクセスはすべて `Repo` を通す
 - `src/api.ts`：LIFF画面用API。`Authorization: Bearer <LIFFのIDトークン>` を `verifyIdToken` で検証して userId を得る
-- `src/line.ts`：署名検証・返信・画像取得・クイックリプライ
+- `src/line.ts`：署名検証・返信・画像取得・クイックリプライ・プッシュ
+- `src/remind.ts`：記録忘れ通知（Cron Trigger、毎晩21時。`src/index.ts` の `scheduled` で crons ごとに分ける）
 - `src/shift/`：シフト収入
   - `calc.ts`：シフトから給料・入金予定を計算する（純粋関数。時刻は日本時間固定）
   - `ical.ts`：iCal → 予定。単純な予定は自前で読み、繰り返しだけ ical.js で展開する（Workers の CPU 時間のため）
@@ -71,4 +72,3 @@ README.md の「次にやること」を参照。優先度順：
 1. LINEグループでの共有家計簿・割り勘精算（均等割り・収入比率などの傾斜割り、メンバー別の支出比較、精算ボタン）
 2. 買い物メモ（グループで共有するチェックリスト）
 3. PayPay取引履歴CSVの取り込み（明細を選んで取り込み、カテゴリは個別に変更可）
-4. 記録忘れ通知（Cron Triggers）

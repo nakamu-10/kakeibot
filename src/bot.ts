@@ -39,7 +39,8 @@ const HELP = `使い方
 ・取り消し … 直前の記録を削除
 ・カテゴリ … カテゴリ一覧
 ・グラフ … グラフ・設定画面を開く
-・収入 … シフト収入の今月の入金予定`;
+・収入 … シフト収入の今月の入金予定
+・通知オン / 通知オフ … 記録していない日の夜9時に知らせる`;
 
 export async function handleEvent(env: Env, ev: LineEvent): Promise<void> {
   const userId = ev.source.userId;
@@ -95,6 +96,18 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   if (/^先月$/.test(t)) return replySummary(ctx, shiftMonth(monthOf(today), -1));
   // 「収入 バイト 30000」は収入の記録なので、「収入」だけのときに限る
   if (/^(収入|入金予定)$/.test(t)) return replyIncoming(ctx, today);
+  const remind = /^通知\s*(オン|on|オフ|off)?$/i.exec(t);
+  if (remind) {
+    if (remind[1]) await repo.setRemind(userId, /^(オン|on)$/i.test(remind[1]));
+    const on = await repo.remind(userId);
+    return reply(env, replyToken, [
+      text(
+        on
+          ? '記録忘れ通知はオンです。記録していない日の夜9時にお知らせします。止めるときは「通知オフ」と送ってください。'
+          : '記録忘れ通知はオフです。始めるときは「通知オン」と送ってください。',
+      ),
+    ]);
+  }
   if (/^(グラフ|アプリ|設定|家計簿)$/.test(t)) {
     return reply(env, replyToken, [text(`グラフ・履歴・設定はこちら\n${liffUrl(env)}`)]);
   }

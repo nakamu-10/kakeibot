@@ -318,6 +318,13 @@
           <p class="muted">0 にすると予算表示をオフにします。</p>
         </section>
         <section>
+          <h2>記録忘れ通知</h2>
+          <label style="display: flex; gap: 6px; align-items: center">
+            <input id="remind" type="checkbox" style="width: auto" />記録していない日の夜9時に LINE で知らせる
+          </label>
+          <p class="muted">トークで「通知オン」「通知オフ」と送っても切り替えられます。</p>
+        </section>
+        <section>
           <h2>支出カテゴリ</h2>
           <div id="cats-expense"></div>
         </section>
@@ -533,6 +540,7 @@
 
       function renderSettings() {
         $('budget-input').value = data.budget || '';
+        $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
           const list = data.categories.filter((c) => c.type === type);
           $('cats-' + type).innerHTML = list
@@ -652,6 +660,11 @@
           await load();
         }
       });
+
+      $('remind').onchange = async () => {
+        await api('/remind', { method: 'PUT', body: JSON.stringify({ on: $('remind').checked }) });
+        data.remind = $('remind').checked;
+      };
 
       $('budget-save').onclick = async () => {
         await api('/budget', { method: 'PUT', body: JSON.stringify({ amount: Number($('budget-input').value) || 0 }) });
