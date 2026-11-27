@@ -1,14 +1,12 @@
 import type { Env } from '../types';
-import type { Repo, StoredJob } from '../db';
+import type { Repo } from '../db';
 import { json, monthOf, todayJST } from '../util';
-import { buildReport, sanitizeAllowance, sanitizeJob, type RawShift } from './calc';
-import { fetchHolidays } from './holidays';
-import { parseShifts, rangeForYear } from './ical';
-import { decryptText, encryptText, isGoogleIcalUrl } from './secret';
+import { sanitizeAllowance, sanitizeJob } from './calc';
+import { loadReport } from './report';
+import { encryptText, isGoogleIcalUrl } from './secret';
 
 const MAX_JOBS = 10;
 const MAX_ALLOWANCES = 10;
-const FETCH_TIMEOUT_MS = 10_000;
 
 /** LIFF のシフト収入ページから呼ばれる API（/api/shift/...）。本人確認は api.ts で済んでいる */
 export async function handleShiftApi(
@@ -65,44 +63,4 @@ async function settingsForClient(repo: Repo, userId: string) {
     repo.incomeWall(userId),
   ]);
   return { jobs: jobs.map(({ icalUrlEnc, ...j }) => ({ ...j, hasIcal: icalUrlEnc !== '' })), allowances, wall };
-}
-
-/** カレンダーと祝日を読み、月のレポートを作る。読めなかったバイト先は errors に入れて続ける */
-async function loadReport(env: Env, repo: Repo, userId: string, year: number, month: number, nowMs: number) {
-  const [jobs, allowances, wall, holidays] = await Promise.all([
-    repo.shiftJobs(userId),
-    repo.allowances(userId),
-    repo.incomeWall(userId),
-    fetchHolidays([year - 1, year]),
-  ]);
-  const errors: string[] = [];
-  const range = rangeForYear(year);
-  const perJob = await Promise.all(
-    jobs.map(async (job) => {
-      try {
-        return await readJobShifts(env, job, range);
-      } catch (e) {
-        // URL が混ざらないよう、ログにはバイト先の id と理由だけ出す
-        console.error('shift calendar failed', job.id, e instanceof Error ? e.message : e);
-        errors.push(`${job.name}：${e instanceof CalendarError ? e.message : 'カレンダーを読めませんでした'}`);
-        return [];
-      }
-    }),
-  );
-  const report = buildReport({ jobs, allowances, wall }, perJob.flat(), holidays, year, month, nowMs);
-  return { ...report, errors, hasJobs: jobs.length > 0 };
-}
-
-/** ユーザーに見せてよい理由のエラー */
-class CalendarError extends Error {}
-
-async function readJobShifts(env: Env, job: StoredJob, range: { from: number; to: number }): Promise<RawShift[]> {
-  if (!job.icalUrlEnc) throw new CalendarError('カレンダーのURLが未登録です');
-  const icalUrl = await decryptText(env.ICAL_ENCRYPTION_KEY, job.icalUrlEnc);
-  const res = await fetch(icalUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-  if (res.status === 404 || res.status === 403) {
-    throw new CalendarError('カレンダーが見つかりません。非公開URLをリセットした場合は、設定で貼り直してください');
-  }
-  if (!res.ok) throw new CalendarError(`カレンダーを読めませんでした（${res.status}）`);
-  return parseShifts(await res.text(), job.id, range);
 }

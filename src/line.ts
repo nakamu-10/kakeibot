@@ -36,6 +36,24 @@ export async function reply(env: Env, replyToken: string, messages: LineMessage[
   if (!res.ok) console.error('reply failed', res.status, await res.text());
 }
 
+/** こちらから送る（給料日の通知など）。無料プランは月に送れる通数に上限がある */
+export async function push(env: Env, to: string, messages: LineMessage[]): Promise<void> {
+  const res = await fetch(`${API}/message/push`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.LINE_CHANNEL_ACCESS_TOKEN}`,
+    },
+    body: JSON.stringify({ to, messages: messages.slice(0, 5) }),
+  });
+  if (!res.ok) console.error('push failed', res.status, await res.text());
+}
+
+/** LIFF のURL。path は '/shift' など */
+export function liffUrl(env: Env, path = ''): string {
+  return `https://liff.line.me/${env.LIFF_ID}${path}`;
+}
+
 /** 「入力中…」のローディング表示（1対1トークのみ有効） */
 export async function showLoading(env: Env, userId: string, seconds = 20): Promise<void> {
   await fetch(`${API}/chat/loading/start`, {

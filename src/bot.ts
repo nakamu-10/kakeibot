@@ -2,7 +2,20 @@ import type { Env, Entry } from './types';
 import { Repo } from './db';
 import { extractDate, parseEntry } from './parse';
 import { ReceiptUnavailableError, readReceipt } from './receipt';
-import { getContent, qrCamera, qrMessage, qrPostback, qrUri, reply, showLoading, text, type LineMessage } from './line';
+import {
+  getContent,
+  liffUrl,
+  qrCamera,
+  qrMessage,
+  qrPostback,
+  qrUri,
+  reply,
+  showLoading,
+  text,
+  type LineMessage,
+} from './line';
+import { loadReport } from './shift/report';
+import { incomingText } from './shift/text';
 import { monthOf, normalize, shiftMonth, todayJST, yen } from './util';
 
 interface LineEvent {
@@ -24,7 +37,8 @@ const HELP = `使い方
 ・予算 50000 … 月の予算を設定
 ・取り消し … 直前の記録を削除
 ・カテゴリ … カテゴリ一覧
-・グラフ … グラフ・設定画面を開く`;
+・グラフ … グラフ・設定画面を開く
+・収入 … シフト収入の今月の入金予定`;
 
 export async function handleEvent(env: Env, ev: LineEvent): Promise<void> {
   const userId = ev.source.userId;
@@ -66,6 +80,8 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
   if (/^(ヘルプ|使い方|help|\?)$/i.test(t)) return reply(env, replyToken, [text(HELP, defaultQuickReplies(env))]);
   if (/^(今月|集計|今月の合計)$/.test(t)) return replySummary(ctx, monthOf(today));
   if (/^先月$/.test(t)) return replySummary(ctx, shiftMonth(monthOf(today), -1));
+  // 「収入 バイト 30000」は収入の記録なので、「収入」だけのときに限る
+  if (/^(収入|入金予定)$/.test(t)) return replyIncoming(ctx, today);
   if (/^(グラフ|アプリ|設定|家計簿)$/.test(t)) {
     return reply(env, replyToken, [text(`グラフ・履歴・設定はこちら\n${liffUrl(env)}`)]);
   }
@@ -249,15 +265,18 @@ async function replySummary(ctx: Ctx, month: string): Promise<void> {
   await reply(env, replyToken, [text(lines.join('\n'), [qrMessage('先月'), qrUri('グラフで見る', liffUrl(env))])]);
 }
 
+async function replyIncoming(ctx: Ctx, today: string): Promise<void> {
+  const { env, repo, userId, replyToken } = ctx;
+  const [y, m] = today.split('-').map(Number);
+  const report = await loadReport(env, repo, userId, y, m, Date.now());
+  await reply(env, replyToken, [text(incomingText(report), [qrUri('シフト収入', liffUrl(env, '/shift'))])]);
+}
+
 function describe(e: Entry): string {
   const sign = e.type === 'income' ? '+' : '';
   const what = [e.store, e.memo].filter(Boolean).join(' ');
   const datePart = e.date !== todayJST() ? `${Number(e.date.slice(5, 7))}/${Number(e.date.slice(8))} ` : '';
   return `${datePart}[${e.category}] ${what ? what + ' ' : ''}${sign}${yen(e.amount)}`;
-}
-
-function liffUrl(env: Env): string {
-  return `https://liff.line.me/${env.LIFF_ID}`;
 }
 
 function defaultQuickReplies(env: Env): LineMessage[] {
