@@ -75,6 +75,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0003_payday_record.sq
 npx wrangler d1 execute kakeibo --remote --file=migrations/0004_remind.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0005_subcategory.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0006_edit_count.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0007_feedback.sql
 npm run deploy
 ```
 
@@ -146,19 +147,30 @@ LINE ログインチャネルが「開発中」の間は、チャネルの管理
 
 ### できること
 
-| ツール              | 内容                                                            |
-| ------------------- | --------------------------------------------------------------- |
-| `list_categories`   | カテゴリの一覧（親子つき）                                      |
-| `search_entries`    | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき）        |
-| `get_summary`       | 月の収支とカテゴリ別の支出・割合                                |
-| `compare_months`    | 2つの月のカテゴリ別の差                                         |
-| `get_budget_status` | 予算に対するペースと、月末の見込み                              |
-| `get_shift_income`  | シフト収入の入金予定・年間の給与・バイト先の設定                |
-| `add_entries`       | 記録をまとめて追加（30件まで）。書き込みの許可が要る            |
-| `update_entry`      | 記録の日付・カテゴリ・金額・メモを直す。書き込みの許可が要る    |
-| `delete_entry`      | 記録を消す（AI アプリが消す前に確かめる）。書き込みの許可が要る |
+| ツール               | 内容                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `list_categories`    | カテゴリの一覧（親子つき）                                                                       |
+| `search_entries`     | 期間・カテゴリ・言葉・金額で記録を探す（件数と合計つき）                                         |
+| `get_summary`        | 月の収支とカテゴリ別の支出・割合                                                                 |
+| `compare_months`     | 2つの月のカテゴリ別の差                                                                          |
+| `get_budget_status`  | 予算に対するペースと、月末の見込み                                                               |
+| `get_shift_income`   | シフト収入の入金予定・年間の給与・バイト先の設定                                                 |
+| `add_entries`        | 記録をまとめて追加（30件まで）。書き込みの許可が要る                                             |
+| `update_entry`       | 記録の日付・カテゴリ・金額・メモを直す。書き込みの許可が要る                                     |
+| `delete_entry`       | 記録を消す（AI アプリが消す前に確かめる）。書き込みの許可が要る                                  |
+| `get_usage_insights` | 使い方の分析（記録の付け方・「その他」・よく直す記録・記録のない日）。アプリの直しどころを考える |
+| `send_feedback`      | アプリへの要望を、開発者に届くよう非公開で残す                                                   |
 
 つなぐときの許可の画面で「家計簿に記録する・直す・消す」を外すと、見るだけになります。予算・カテゴリ・シフト収入の設定は、AI からは変えられません。
+
+### 届いた要望を見る（持ち主）
+
+要望は D1 の `feedback` にたまります（リポジトリが公開なので、Issue には直接作りません）。読んで Issue にするかを決めたら、`done` にします。
+
+```powershell
+npx wrangler d1 execute kakeibo --remote --command "SELECT id, body, created_at FROM feedback WHERE status = 'new' ORDER BY id"
+npx wrangler d1 execute kakeibo --remote --command "UPDATE feedback SET status = 'done' WHERE id = 1"
+```
 
 ## ローカル開発
 
