@@ -12,3 +12,5 @@
   - PRの行数・テストの有無の警告、textlint、issueテンプレート：チームでレビューを回すための仕組みなので1人では後回し
   - ESLintの独自ルール：同じ設計違反をAIが繰り返すようになってから `no-restricted-imports` などで足す
   - ESLintの `restrict-template-expressions` は数値だけ許した（金額・日付の埋め込みが多いため）。`no-confusing-void-expression` は `return reply(...)` で抜ける書き方を許した
+
+追記（2026-11-28）：引き継ぎ・ひとりでのレビュー・改行のそろえなどを 0011 で足した。
