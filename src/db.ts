@@ -1,3 +1,4 @@
+import type { Change, ChangeOp, ChangeTarget, StoredChange } from './changes';
 import type { Category, Entry, EntryType } from './types';
 import { DEFAULT_CATEGORIES } from './parse';
 import { sanitizeJob, type Allowance, type Job } from './shift/calc';
@@ -187,6 +188,16 @@ export class Repo {
       .run();
   }
 
+  /** 消した記録を、同じ id で戻す（取り消し用） */
+  async restoreEntry(userId: string, e: Entry): Promise<void> {
+    await this.db
+      .prepare(
+        'INSERT INTO entries (id, user_id, type, category, amount, memo, store, date, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(e.id, userId, e.type, e.category, e.amount, e.memo, e.store, e.date, e.source)
+      .run();
+  }
+
   async deleteEntry(userId: string, id: number): Promise<boolean> {
     const r = await this.db.prepare('DELETE FROM entries WHERE id = ? AND user_id = ?').bind(id, userId).run();
     return r.meta.changes > 0;
@@ -263,6 +274,90 @@ export class Repo {
       .bind(userId, from)
       .all<{ date: string; category: string; memo: string; source: string; edit_count: number; created_at: string }>();
     return r.results;
+  }
+
+  // ---------- 変更の履歴（取り消し用） ----------
+  async recordChanges(userId: string, batch: string, changes: Change[]): Promise<void> {
+    if (!changes.length) return;
+    await this.db.batch(
+      changes.map((c) =>
+        this.db
+          .prepare(
+            'INSERT INTO changes (user_id, batch, target, target_id, op, before, after, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          )
+          .bind(
+            userId,
+            batch,
+            c.target,
+            c.targetId,
+            c.op,
+            JSON.stringify(c.before),
+            JSON.stringify(c.after),
+            c.summary,
+          ),
+      ),
+    );
+  }
+
+  /** 最近の変更を、1回の依頼ごとにまとめて新しい順に（createdAt は日本時間の 'YYYY-MM-DD HH:MM:SS'） */
+  async changeBatches(
+    userId: string,
+    limit = 10,
+  ): Promise<{ batch: string; createdAt: string; summaries: string[]; undone: boolean }[]> {
+    const batches = await this.db
+      .prepare(
+        `SELECT batch, datetime(MIN(created_at), '+9 hours') AS createdAt, MAX(undone) AS undone FROM changes WHERE user_id = ?
+         GROUP BY batch ORDER BY MAX(id) DESC LIMIT ?`,
+      )
+      .bind(userId, limit)
+      .all<{ batch: string; createdAt: string; undone: number }>();
+    return Promise.all(
+      batches.results.map(async (b) => ({
+        batch: b.batch,
+        createdAt: b.createdAt,
+        undone: b.undone === 1,
+        summaries: (await this.changesOf(userId, b.batch)).map((c) => c.summary),
+      })),
+    );
+  }
+
+  async changesOf(userId: string, batch: string): Promise<StoredChange[]> {
+    const r = await this.db
+      .prepare(
+        'SELECT id, target, target_id, op, before, after, summary FROM changes WHERE user_id = ? AND batch = ? ORDER BY id',
+      )
+      .bind(userId, batch)
+      .all<{
+        id: number;
+        target: ChangeTarget;
+        target_id: number;
+        op: ChangeOp;
+        before: string;
+        after: string;
+        summary: string;
+      }>();
+    return r.results.map((c) => ({
+      id: c.id,
+      target: c.target,
+      targetId: c.target_id,
+      op: c.op,
+      before: JSON.parse(c.before) as unknown,
+      after: JSON.parse(c.after) as unknown,
+      summary: c.summary,
+    }));
+  }
+
+  /** まだ取り消していない、いちばん新しい依頼 */
+  async latestUndoableBatch(userId: string): Promise<string | null> {
+    const r = await this.db
+      .prepare('SELECT batch FROM changes WHERE user_id = ? AND undone = 0 ORDER BY id DESC LIMIT 1')
+      .bind(userId)
+      .first<{ batch: string }>();
+    return r?.batch ?? null;
+  }
+
+  async markUndone(userId: string, batch: string): Promise<void> {
+    await this.db.prepare('UPDATE changes SET undone = 1 WHERE user_id = ? AND batch = ?').bind(userId, batch).run();
   }
 
   // ---------- 要望 ----------

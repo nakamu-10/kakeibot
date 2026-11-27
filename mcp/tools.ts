@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { groupByParent } from '../src/category';
+import { budgetChange, entryChange, undoBatch } from '../src/changes';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
 import { monthOf, shiftMonth, todayJST } from '../src/util';
@@ -260,6 +261,11 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         });
         added.push(await repo.mustGetEntry(userId, id));
       }
+      await repo.recordChanges(
+        userId,
+        crypto.randomUUID(),
+        added.map((e) => entryChange('insert', null, e)),
+      );
       return result({ added });
     },
   );
@@ -290,7 +296,9 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         type = cat.type;
       }
       await repo.updateEntry(userId, id, { date, category, amount, memo, type });
-      return result({ before, after: await repo.mustGetEntry(userId, id) });
+      const after = await repo.mustGetEntry(userId, id);
+      await repo.recordChanges(userId, crypto.randomUUID(), [entryChange('update', before, after)]);
+      return result({ before, after });
     },
   );
 
@@ -306,7 +314,59 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       const entry = await repo.getEntry(userId, id);
       if (!entry) return error(`id ${id} の記録が見つかりません（もう消されたか、別の人の記録です）。`);
       await repo.deleteEntry(userId, id);
+      await repo.recordChanges(userId, crypto.randomUUID(), [entryChange('delete', entry, null)]);
       return result({ deleted: entry });
+    },
+  );
+
+  server.registerTool(
+    'set_budget',
+    {
+      title: '月の予算を変える',
+      description:
+        '月の予算（支出の上限、円）を変える。0 で予算なし。変える前に、いくらにするかをユーザーに確かめる。undo_changes で戻せる。',
+      inputSchema: z.object({ amount: z.number().int().min(0).describe('円。0 で予算なし') }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ amount }) => {
+      const before = await repo.budget(userId);
+      await repo.setBudget(userId, amount);
+      await repo.recordChanges(userId, crypto.randomUUID(), [budgetChange(before, amount)]);
+      return result({ before, after: amount });
+    },
+  );
+
+  // ---------- 変更の履歴と取り消し ----------
+  server.registerTool(
+    'list_changes',
+    {
+      title: 'AI による変更の履歴',
+      description:
+        'AI（このサーバー）が家計簿に加えた変更を、1回の依頼ごとに新しい順で返す。batch を undo_changes に渡すと、その回の変更を戻せる。',
+      inputSchema: z.object({ limit: z.number().int().min(1).max(50).default(10) }),
+      annotations: READ_ONLY,
+    },
+    async ({ limit }) => result(await repo.changeBatches(userId, limit)),
+  );
+
+  server.registerTool(
+    'undo_changes',
+    {
+      title: '変更を取り消す',
+      description:
+        'AI が加えた変更を、1回の依頼の単位で元に戻す。batch を省くと、まだ取り消していない直前の回を戻す。' +
+        'その後にユーザーが直した記録は戻さず skipped で返す。戻す前に、どの変更を戻すかをユーザーに確かめる。',
+      inputSchema: z.object({ batch: z.string().optional().describe('list_changes の batch') }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ batch }) => {
+      const target = batch ?? (await repo.latestUndoableBatch(userId));
+      if (!target) return error('取り消せる変更がありません。');
+      const changes = await repo.changesOf(userId, target);
+      if (!changes.length) return error(`変更 ${target} が見つかりません。list_changes の batch を使ってください。`);
+      const outcome = await undoBatch(repo, userId, changes);
+      await repo.markUndone(userId, target);
+      return result({ batch: target, ...outcome });
     },
   );
 

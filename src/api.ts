@@ -2,6 +2,7 @@ import type { Env, EntryType } from './types';
 import { Repo } from './db';
 import { verifyIdToken } from './line';
 import { json, monthOf, todayJST } from './util';
+import { undoBatch } from './changes';
 import { groupByParent, orderCategories, parentError, parentName } from './category';
 import { handleShiftApi } from './shift/api';
 
@@ -24,12 +25,13 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind] = await Promise.all([
+    const [summary, trend, budget, categories, remind, changes] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
       repo.budget(userId),
       repo.categories(userId),
       repo.remind(userId),
+      repo.changeBatches(userId, 10),
     ]);
     return json({
       ...summary,
@@ -39,6 +41,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       budget,
       categories: orderCategories(categories),
       remind,
+      changes,
       today: todayJST(),
     });
   }
@@ -48,6 +51,16 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const amount = Math.max(0, Math.round(Number(body.amount) || 0));
     await repo.setBudget(userId, amount);
     return json({ ok: true, budget: amount });
+  }
+
+  // AI による変更の取り消し
+  if (method === 'POST' && path === '/changes/undo') {
+    const batch = str(body.batch);
+    const changes = batch ? await repo.changesOf(userId, batch) : [];
+    if (!changes.length) return json({ error: 'その変更は見つかりませんでした' }, 404);
+    const outcome = await undoBatch(repo, userId, changes);
+    await repo.markUndone(userId, batch);
+    return json({ ok: true, ...outcome });
   }
 
   // 記録忘れ通知
