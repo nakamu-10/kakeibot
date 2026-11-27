@@ -16,10 +16,13 @@ const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const;
 
 /** 結果を JSON で返す（AI が読みやすいように、文章ではなく構造で） */
 const result = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] });
+/** AI に直してもらうための失敗（例外ではなく、ツールの結果として返す） */
+const error = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true });
 
 /**
  * 家計簿の MCP サーバー（1リクエストごとに作る）。userId は LINE ログインで確かめた本人。
- * フェーズ1は読み取りだけ。金額は円の整数、日付は日本時間の 'YYYY-MM-DD'
+ * 読み取り（kakeibo:read）と、記録の追加・修正・削除（kakeibo:write）。予算やカテゴリなどの設定は変えない。
+ * 金額は円の整数、日付は日本時間の 'YYYY-MM-DD'
  */
 export function createServer(env: McpEnv, userId: string): McpServer {
   const repo = new Repo(env.DB);
@@ -168,6 +171,104 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         repo.shiftJobs(userId),
       ]);
       return result({ ...report, jobs });
+    },
+  );
+
+  // ---------- 書き込み（スコープ kakeibo:write。許可がなければ index.ts が 403 で求め直す） ----------
+  server.registerTool(
+    'add_entries',
+    {
+      title: '記録を追加する',
+      description:
+        '家計簿に記録を追加する（まとめて30件まで）。category は list_categories の name か children の name をそのまま使う。' +
+        '支出か収入かはカテゴリで決まる。1件でもカテゴリが見つからなければ、何も記録せずにエラーを返す。' +
+        'レシートや購入履歴の写真から記録するときは、合計ではなく品目ごとに分けるかどうかをユーザーに合わせる。',
+      inputSchema: z.object({
+        entries: z
+          .array(
+            z.object({
+              date: DATE.optional().describe('YYYY-MM-DD（日本時間）。省略すると今日'),
+              category: z.string().describe('カテゴリ名'),
+              amount: z.number().int().positive().describe('金額（円）'),
+              memo: z.string().max(100).optional().describe('何に使ったか（例: ランチ）'),
+              store: z.string().max(50).optional().describe('店名'),
+            }),
+          )
+          .min(1)
+          .max(30),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async ({ entries }) => {
+      const cats = await repo.categories(userId);
+      const unknown = entries.map((e) => e.category).filter((name) => !cats.some((c) => c.name === name));
+      if (unknown.length) {
+        return error(
+          `カテゴリが見つかりません: ${[...new Set(unknown)].join('、')}。list_categories の名前を使ってください。何も記録していません。`,
+        );
+      }
+      const today = todayJST();
+      const added = [];
+      for (const e of entries) {
+        const type = cats.find((c) => c.name === e.category)?.type ?? 'expense';
+        const id = await repo.addEntry(userId, {
+          type,
+          category: e.category,
+          amount: e.amount,
+          memo: e.memo ?? '',
+          store: e.store ?? '',
+          date: e.date ?? today,
+          source: 'ai',
+        });
+        added.push(await repo.mustGetEntry(userId, id));
+      }
+      return result({ added });
+    },
+  );
+
+  server.registerTool(
+    'update_entry',
+    {
+      title: '記録を直す',
+      description:
+        '記録の日付・カテゴリ・金額・メモを直す（渡したものだけ変える）。id は search_entries や add_entries の結果のもの。' +
+        'カテゴリを変えると、支出か収入かもそのカテゴリに合わせる。',
+      inputSchema: z.object({
+        id: z.number().int(),
+        date: DATE.optional(),
+        category: z.string().optional(),
+        amount: z.number().int().positive().optional(),
+        memo: z.string().max(100).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id, date, category, amount, memo }) => {
+      const before = await repo.getEntry(userId, id);
+      if (!before) return error(`id ${id} の記録が見つかりません（消されたか、別の人の記録です）。`);
+      let type = undefined;
+      if (category) {
+        const cat = (await repo.categories(userId)).find((c) => c.name === category);
+        if (!cat) return error(`カテゴリ「${category}」が見つかりません。list_categories の名前を使ってください。`);
+        type = cat.type;
+      }
+      await repo.updateEntry(userId, id, { date, category, amount, memo, type });
+      return result({ before, after: await repo.mustGetEntry(userId, id) });
+    },
+  );
+
+  server.registerTool(
+    'delete_entry',
+    {
+      title: '記録を消す',
+      description: '記録を1件消す。元に戻せないので、消す前に、どの記録かをユーザーに確かめる。',
+      inputSchema: z.object({ id: z.number().int() }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const entry = await repo.getEntry(userId, id);
+      if (!entry) return error(`id ${id} の記録が見つかりません（もう消されたか、別の人の記録です）。`);
+      await repo.deleteEntry(userId, id);
+      return result({ deleted: entry });
     },
   );
 

@@ -1,5 +1,5 @@
 import type { ConsentDescription } from '@cloudflare/workers-oauth-provider';
-import { SCOPE_LABELS } from './scopes';
+import { READ, SCOPE_LABELS, WRITE } from './scopes';
 
 // 認証の画面と PKCE（ライブラリを読み込まないので、Node のテストからも呼べる）
 
@@ -28,13 +28,13 @@ export function consentPage(details: ConsentDescription, handle: string): string
   const origin = details.clientDomain
     ? `<strong>${escape(details.clientDomain)}</strong> が公開しているアプリです。`
     : 'このアプリの名前は、アプリが自分で名乗ったもので、確かめられていません。';
-  const scopes = details.scope
-    .filter((s) => s in SCOPE_LABELS)
-    .map(
-      (s) =>
-        `<label class="scope"><input type="checkbox" name="scope" value="${escape(s)}" checked> ${escape(SCOPE_LABELS[s])}</label>`,
-    )
-    .join('');
+  // 見るのはいつも許す。書き込みはここで選べる（アプリが求めていなくても出し、初めはオン）。
+  // 先に選べるようにしておくと、書くときに許可を取り直さずに済む
+  const scopes =
+    `<input type="hidden" name="scope" value="${READ}">` +
+    `<p class="scope">✓ ${escape(SCOPE_LABELS[READ])}</p>` +
+    `<label class="scope"><input type="checkbox" name="scope" value="${WRITE}" checked> ${escape(SCOPE_LABELS[WRITE])}</label>` +
+    (details.scope.includes('offline_access') ? '<input type="hidden" name="scope" value="offline_access">' : '');
   const loopback = details.redirectIsLoopback
     ? '<p class="warn">このパソコンの中のアプリに許可を渡します。自分で今つなごうとしたときだけ進めてください。</p>'
     : '';
