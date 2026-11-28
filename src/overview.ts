@@ -11,8 +11,11 @@ import { shiftMonth } from './util';
 interface MonthRecord {
   month: string;
   income: number;
+  /** 使ったお金（貯金・投資を除く） */
   expense: number;
-  /** 親カテゴリでまとめた支出 */
+  /** 貯金・投資に回したお金 */
+  saving: number;
+  /** 親カテゴリでまとめた支出（貯金・投資を除く） */
   byCategory: Record<string, number>;
 }
 
@@ -20,6 +23,8 @@ interface OverviewInput {
   thisMonth: string;
   /** 今月を除く直近の月（古い順） */
   months: MonthRecord[];
+  /** 貯金・投資のカテゴリの名前 */
+  savings: Set<string>;
   fixedCosts: FixedCost[];
   budget: number;
   goals: Awaited<ReturnType<typeof loadGoals>>;
@@ -29,13 +34,14 @@ interface OverviewInput {
 const monthLabel = (month: string) => `${Number(month.slice(5, 7))}月`;
 
 export function financialOverview(input: OverviewInput) {
-  const { thisMonth, months, fixedCosts, budget, goals, assets } = input;
+  const { thisMonth, months, savings, fixedCosts, budget, goals, assets } = input;
   // 記録が1件もない月は、平均に入れない（使い始める前の月）
-  const used = months.filter((m) => m.income || m.expense);
+  const used = months.filter((m) => m.income || m.expense || m.saving);
   const avg = (pick: (m: MonthRecord) => number) =>
     used.length ? Math.round(used.reduce((t, m) => t + pick(m), 0) / used.length) : 0;
   const income = avg((m) => m.income);
   const expense = avg((m) => m.expense);
+  const saving = avg((m) => m.saving);
 
   const names = [...new Set(used.flatMap((m) => Object.keys(m.byCategory)))];
   const spending = names
@@ -45,21 +51,28 @@ export function financialOverview(input: OverviewInput) {
     })
     .sort((a, b) => b.average - a.average);
 
-  const fixedTotal = monthlyTotal(fixedCosts);
+  // NISA の積立のような固定費は、使ったお金ではないので、固定費の合計と割合には入れない
+  const fixedTotal = monthlyTotal(fixedCosts.filter((f) => !savings.has(f.category)));
   // 生活費の何か月分を、すぐ使える預金・現金で持っているか
   const liquid = assets.accounts.filter((a) => a.kind === 'savings' && a.active).reduce((t, a) => t + a.balance, 0);
   const history = assets.history;
 
   return {
     period: { months: months.map((m) => m.month), usedMonths: used.length },
-    monthly: { income, expense, surplus: income - expense },
+    monthly: { income, expense, saving, surplus: income - expense, leftAfterSaving: income - expense - saving },
     spendingByCategory: spending,
     fixedCosts: {
       monthlyTotal: fixedTotal,
       shareOfExpense: expense ? Math.round((fixedTotal / expense) * 1000) / 1000 : null,
       items: fixedCosts
         .filter((f) => f.active)
-        .map((f) => ({ name: f.name, category: f.category, monthly: monthlyAmount(f), autoRecord: f.autoRecord })),
+        .map((f) => ({
+          name: f.name,
+          category: f.category,
+          monthly: monthlyAmount(f),
+          autoRecord: f.autoRecord,
+          saving: savings.has(f.category),
+        })),
     },
     budget: budget ? { amount: budget, minusAverageExpense: budget - expense } : null,
     emergencyFund: expense && liquid ? { liquid, monthsOfExpenses: Math.round((liquid / expense) * 10) / 10 } : null,
@@ -105,7 +118,7 @@ function overviewWarnings(
       `直近${months.length}か月のうち、記録がある月は${usedMonths}か月だけです。平均はその月だけで出しています。`,
     );
   }
-  const noIncome = months.filter((m) => m.expense && !m.income).map((m) => monthLabel(m.month));
+  const noIncome = months.filter((m) => (m.expense || m.saving) && !m.income).map((m) => monthLabel(m.month));
   if (noIncome.length) {
     warnings.push(
       `${noIncome.join('・')}は収入の記録がありません。収入を記録していないと、毎月の余りが実際より少なく出ます。`,

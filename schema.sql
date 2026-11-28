@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS categories (
   sort     INTEGER NOT NULL DEFAULT 0,
   keywords TEXT NOT NULL DEFAULT '',          -- カンマ区切り。「ランチ」→食費 のような自動判定用
   parent_id INTEGER NOT NULL DEFAULT 0,       -- 親カテゴリの id（0 = 一番上の段）。2段まで
+  saving   INTEGER NOT NULL DEFAULT 0,        -- 1 なら貯金・投資（使ったお金ではないので、支出に数えない）
   UNIQUE (user_id, name)
 );
 

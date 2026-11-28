@@ -314,7 +314,10 @@ async function replyRecorded(ctx: Ctx, e: Entry, title = '記録しました ✓
   if (children.length) {
     lines.push(`${e.category}のどれですか？下のボタンで選べます（選ばなければ${e.category}のまま）。`);
   }
-  if (e.type === 'expense') {
+  if (e.type === 'expense' && e.category in s.savingByCategory) {
+    // 貯金・投資は使ったお金ではないので、支出や予算の残りは出さない
+    lines.push('', `${label}の貯金・投資 ${yen(s.saving)}`);
+  } else if (e.type === 'expense') {
     lines.push('', `${label}の${e.category} ${yen(s.byCategory[e.category] ?? 0)}`);
     const groupName = parentName(cats, e.category) ?? e.category;
     const group = groupByParent(s.byCategory, cats).find((g) => g.name === groupName);
@@ -350,6 +353,7 @@ async function replySummary(ctx: Ctx, month: string): Promise<void> {
     `収入 ${yen(s.income)}`,
     `収支 ${yen(s.income - s.expense)}`,
   ];
+  if (s.saving) lines.push(`（うち貯金・投資に ${yen(s.saving)}）`);
   if (budget) {
     lines.push(`予算残り ${yen(budget - s.expense)}（${Math.round((s.expense / budget) * 100)}% 使用）`);
   }

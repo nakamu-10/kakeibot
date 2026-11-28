@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTreeText, childrenOf, groupByParent, orderCategories, parentError, parentName } from './category';
-import { parseEntry } from './parse';
+import {
+  categoryTreeText,
+  childrenOf,
+  groupByParent,
+  orderCategories,
+  parentError,
+  parentName,
+  savingNames,
+} from './category';
+import { DEFAULT_CATEGORIES, parseEntry } from './parse';
 import type { Category } from './types';
 
 const cat = (id: number, name: string, parentId = 0, sort = id, type: Category['type'] = 'expense'): Category => ({
@@ -10,6 +18,7 @@ const cat = (id: number, name: string, parentId = 0, sort = id, type: Category['
   sort,
   keywords: '',
   parentId,
+  saving: false,
 });
 // 食費・日用品（服・雑貨）・交通費、給与（収入）
 const cats = [
@@ -93,5 +102,24 @@ describe('childrenOf', () => {
     expect(childrenOf(cats, '日用品').map((c) => c.name)).toEqual(['服', '雑貨']);
     expect(childrenOf(cats, '服')).toEqual([]);
     expect(childrenOf(cats, '食費')).toEqual([]);
+  });
+});
+
+describe('savingNames', () => {
+  it('印の付いた支出のカテゴリと、その子。収入は入れない', () => {
+    const cats = [
+      { ...cat(1, '貯金・投資'), saving: true },
+      cat(2, 'NISA', 1),
+      cat(3, '食費'),
+      { ...cat(4, '給与', 0, 4, 'income'), saving: true },
+    ];
+    expect([...savingNames(cats)]).toEqual(['貯金・投資', 'NISA']);
+  });
+});
+
+describe('初期カテゴリの貯金・投資', () => {
+  it('「NISA 4000」「積立 4000」は貯金・投資になる', () => {
+    expect(parseEntry('NISA 4000', DEFAULT_CATEGORIES)).toMatchObject({ category: '貯金・投資', amount: 4000 });
+    expect(parseEntry('積立 4000', DEFAULT_CATEGORIES)).toMatchObject({ category: '貯金・投資' });
   });
 });

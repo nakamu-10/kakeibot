@@ -23,14 +23,28 @@ const goals = { monthlySurplus: 30000, basis: [], goals: [{ ...trip, ...goalPlan
 const input: Parameters<typeof financialOverview>[0] = {
   thisMonth: '2026-11',
   months: [
-    { month: '2026-08', income: 0, expense: 0, byCategory: {} },
-    { month: '2026-09', income: 150000, expense: 120000, byCategory: { 住居: 60000, 食費: 40000, 趣味: 20000 } },
-    { month: '2026-10', income: 0, expense: 120000, byCategory: { 住居: 60000, 食費: 50000, 趣味: 10000 } },
+    { month: '2026-08', income: 0, expense: 0, saving: 0, byCategory: {} },
+    {
+      month: '2026-09',
+      income: 150000,
+      expense: 120000,
+      saving: 4000,
+      byCategory: { 住居: 60000, 食費: 40000, 趣味: 20000 },
+    },
+    {
+      month: '2026-10',
+      income: 0,
+      expense: 120000,
+      saving: 4000,
+      byCategory: { 住居: 60000, 食費: 50000, 趣味: 10000 },
+    },
   ],
+  savings: new Set(['貯金・投資']),
   fixedCosts: [
     sanitizeFixedCost({ name: '家賃', amount: 60000, category: '住居' }),
     sanitizeFixedCost({ name: 'Amazonプライム', amount: 6000, category: '趣味', cycle: 'yearly', month: 3 }),
     sanitizeFixedCost({ name: 'ジム', amount: 7000, active: false }),
+    sanitizeFixedCost({ name: 'NISA 積立', amount: 4000, category: '貯金・投資' }),
   ],
   budget: 100000,
   goals,
@@ -42,7 +56,13 @@ describe('financialOverview', () => {
 
   it('記録のある月だけで、収入・支出・余りとカテゴリの平均を出す', () => {
     expect(o.period).toEqual({ months: ['2026-08', '2026-09', '2026-10'], usedMonths: 2 });
-    expect(o.monthly).toEqual({ income: 75000, expense: 120000, surplus: -45000 });
+    expect(o.monthly).toEqual({
+      income: 75000,
+      expense: 120000,
+      saving: 4000,
+      surplus: -45000,
+      leftAfterSaving: -49000,
+    });
     expect(o.spendingByCategory).toEqual([
       { name: '住居', average: 60000, share: 0.5 },
       { name: '食費', average: 45000, share: 0.375 },
@@ -50,13 +70,14 @@ describe('financialOverview', () => {
     ]);
   });
 
-  it('固定費は毎月にならし、やめたものは入れない。予算と平均の差', () => {
+  it('固定費は毎月にならし、やめたもの・貯金・投資は合計に入れない。予算と平均の差', () => {
     expect(o.fixedCosts).toEqual({
       monthlyTotal: 60500,
       shareOfExpense: 0.504,
       items: [
-        { name: '家賃', category: '住居', monthly: 60000, autoRecord: true },
-        { name: 'Amazonプライム', category: '趣味', monthly: 500, autoRecord: true },
+        { name: '家賃', category: '住居', monthly: 60000, autoRecord: true, saving: false },
+        { name: 'Amazonプライム', category: '趣味', monthly: 500, autoRecord: true, saving: false },
+        { name: 'NISA 積立', category: '貯金・投資', monthly: 4000, autoRecord: true, saving: true },
       ],
     });
     expect(o.budget).toEqual({ amount: 100000, minusAverageExpense: -20000 });
@@ -82,13 +103,13 @@ describe('financialOverview', () => {
   it('記録も資産もなければ、出せないものは null', () => {
     const empty = financialOverview({
       ...input,
-      months: input.months.map((m) => ({ ...m, income: 0, expense: 0, byCategory: {} })),
+      months: input.months.map((m) => ({ ...m, income: 0, expense: 0, saving: 0, byCategory: {} })),
       fixedCosts: [],
       budget: 0,
       assets: assetSummary([], [], '2026-11', 3),
     });
     expect(empty).toMatchObject({
-      monthly: { income: 0, expense: 0, surplus: 0 },
+      monthly: { income: 0, expense: 0, saving: 0, surplus: 0, leftAfterSaving: 0 },
       budget: null,
       emergencyFund: null,
       fixedCosts: { monthlyTotal: 0, shareOfExpense: null },

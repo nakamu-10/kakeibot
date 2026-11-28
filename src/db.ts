@@ -4,6 +4,7 @@ import { sanitizeFixedCost, type FixedCost } from './fixed';
 import { sanitizeGoal, type Goal } from './goals';
 import { sanitizeAccount, type Account, type Balance } from './assets';
 import { DEFAULT_CATEGORIES } from './parse';
+import { savingNames } from './category';
 import { sanitizeJob, type Allowance, type Job } from './shift/calc';
 import { daysInMonth, shiftMonth } from './util';
 
@@ -18,8 +19,10 @@ export class Repo {
       this.db.prepare('INSERT OR IGNORE INTO users (id) VALUES (?)').bind(userId),
       ...DEFAULT_CATEGORIES.map((c, i) =>
         this.db
-          .prepare('INSERT OR IGNORE INTO categories (user_id, name, type, sort, keywords) VALUES (?, ?, ?, ?, ?)')
-          .bind(userId, c.name, c.type, i, c.keywords),
+          .prepare(
+            'INSERT OR IGNORE INTO categories (user_id, name, type, sort, keywords, saving) VALUES (?, ?, ?, ?, ?, ?)',
+          )
+          .bind(userId, c.name, c.type, i, c.keywords, c.saving ? 1 : 0),
       ),
     ];
     await this.db.batch(stmts);
@@ -29,28 +32,37 @@ export class Repo {
   async categories(userId: string): Promise<Category[]> {
     const r = await this.db
       .prepare(
-        'SELECT id, name, type, sort, keywords, parent_id AS parentId FROM categories WHERE user_id = ? ORDER BY type, sort, id',
+        'SELECT id, name, type, sort, keywords, parent_id AS parentId, saving FROM categories WHERE user_id = ? ORDER BY type, sort, id',
       )
       .bind(userId)
-      .all<Category>();
-    return r.results;
+      .all<Omit<Category, 'saving'> & { saving: number }>();
+    return r.results.map((c) => ({ ...c, saving: c.saving === 1 }));
   }
 
-  async addCategory(userId: string, name: string, type: EntryType, keywords = '', parentId = 0): Promise<void> {
+  async addCategory(
+    userId: string,
+    name: string,
+    type: EntryType,
+    keywords = '',
+    parentId = 0,
+    saving = false,
+  ): Promise<void> {
     const max = await this.db
       .prepare('SELECT COALESCE(MAX(sort), -1) AS m FROM categories WHERE user_id = ?')
       .bind(userId)
       .first<{ m: number }>();
     await this.db
-      .prepare('INSERT INTO categories (user_id, name, type, sort, keywords, parent_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(userId, name, type, (max?.m ?? -1) + 1, keywords, parentId)
+      .prepare(
+        'INSERT INTO categories (user_id, name, type, sort, keywords, parent_id, saving) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(userId, name, type, (max?.m ?? -1) + 1, keywords, parentId, type === 'expense' && saving ? 1 : 0)
       .run();
   }
 
   async updateCategory(
     userId: string,
     id: number,
-    fields: { name?: string; keywords?: string; parentId?: number },
+    fields: { name?: string; keywords?: string; parentId?: number; saving?: boolean },
   ): Promise<void> {
     const cur = await this.db
       .prepare('SELECT name FROM categories WHERE id = ? AND user_id = ?')
@@ -61,9 +73,17 @@ export class Repo {
       this.db
         .prepare(
           `UPDATE categories SET name = COALESCE(?, name), keywords = COALESCE(?, keywords),
-             parent_id = COALESCE(?, parent_id) WHERE id = ? AND user_id = ?`,
+             parent_id = COALESCE(?, parent_id), saving = CASE WHEN type = 'expense' THEN COALESCE(?, saving) ELSE 0 END
+           WHERE id = ? AND user_id = ?`,
         )
-        .bind(fields.name ?? null, fields.keywords ?? null, fields.parentId ?? null, id, userId),
+        .bind(
+          fields.name ?? null,
+          fields.keywords ?? null,
+          fields.parentId ?? null,
+          fields.saving === undefined ? null : fields.saving ? 1 : 0,
+          id,
+          userId,
+        ),
     ];
     // 名前を変えたら過去の記録も付け替える
     if (fields.name && fields.name !== cur.name) {
@@ -682,15 +702,25 @@ export class Repo {
   }
 
   /** 月の集計（トーク返信・アプリ共通） */
+  /**
+   * 月のまとめ。貯金・投資のカテゴリは、使ったお金ではないので expense と byCategory に入れず、
+   * saving と savingByCategory に分ける
+   */
   async monthSummary(userId: string, month: string) {
-    const entries = await this.entriesOfMonth(userId, month);
+    const [entries, cats] = await Promise.all([this.entriesOfMonth(userId, month), this.categories(userId)]);
+    const savings = savingNames(cats);
     let expense = 0;
     let income = 0;
+    let saving = 0;
     const byCategory: Record<string, number> = {};
+    const savingByCategory: Record<string, number> = {};
     const incomeByCategory: Record<string, number> = {};
     const daily = new Array(daysInMonth(month)).fill(0) as number[];
     for (const e of entries) {
-      if (e.type === 'expense') {
+      if (e.type === 'expense' && savings.has(e.category)) {
+        saving += e.amount;
+        savingByCategory[e.category] = (savingByCategory[e.category] ?? 0) + e.amount;
+      } else if (e.type === 'expense') {
         expense += e.amount;
         byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
         const d = parseInt(e.date.slice(8, 10), 10) - 1;
@@ -700,25 +730,34 @@ export class Repo {
         incomeByCategory[e.category] = (incomeByCategory[e.category] ?? 0) + e.amount;
       }
     }
-    return { month, expense, income, byCategory, incomeByCategory, daily, entries };
+    return { month, expense, income, saving, byCategory, savingByCategory, incomeByCategory, daily, entries };
   }
 
-  /** 直近 n か月の推移 */
+  /** 直近 n か月の推移。貯金・投資は expense に入れず saving に分ける */
   async trend(userId: string, endMonth: string, n = 6) {
     const start = shiftMonth(endMonth, -(n - 1));
-    const r = await this.db
-      .prepare(
-        `SELECT substr(date, 1, 7) AS m, type, SUM(amount) AS total FROM entries
-         WHERE user_id = ? AND date BETWEEN ? AND ? GROUP BY m, type`,
-      )
-      .bind(userId, `${start}-01`, `${endMonth}-31`)
-      .all<{ m: string; type: EntryType; total: number }>();
+    const [r, cats] = await Promise.all([
+      this.db
+        .prepare(
+          `SELECT substr(date, 1, 7) AS m, type, category, SUM(amount) AS total FROM entries
+           WHERE user_id = ? AND date BETWEEN ? AND ? GROUP BY m, type, category`,
+        )
+        .bind(userId, `${start}-01`, `${endMonth}-31`)
+        .all<{ m: string; type: EntryType; category: string; total: number }>(),
+      this.categories(userId),
+    ]);
+    const savings = savingNames(cats);
     const months = Array.from({ length: n }, (_, i) => shiftMonth(start, i));
-    return months.map((m) => ({
-      month: m,
-      expense: r.results.find((x) => x.m === m && x.type === 'expense')?.total ?? 0,
-      income: r.results.find((x) => x.m === m && x.type === 'income')?.total ?? 0,
-    }));
+    return months.map((month) => {
+      const rows = r.results.filter((x) => x.m === month);
+      const sum = (pick: (x: (typeof rows)[number]) => boolean) => rows.filter(pick).reduce((t, x) => t + x.total, 0);
+      return {
+        month,
+        expense: sum((x) => x.type === 'expense' && !savings.has(x.category)),
+        income: sum((x) => x.type === 'income'),
+        saving: sum((x) => x.type === 'expense' && savings.has(x.category)),
+      };
+    });
   }
   // ---------- シフト収入 ----------
   async shiftJobs(userId: string): Promise<Job[]> {

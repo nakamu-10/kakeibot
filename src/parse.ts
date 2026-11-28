@@ -8,6 +8,7 @@ export interface CategoryLite {
   /** DB のカテゴリにだけある（初期カテゴリにはない） */
   id?: number;
   parentId?: number;
+  saving?: boolean;
 }
 
 /** 新規ユーザーに入れる初期カテゴリ */
@@ -36,6 +37,8 @@ export const DEFAULT_CATEGORIES: CategoryLite[] = [
   { name: '住居', type: 'expense', keywords: '家賃,管理費' },
   { name: '光熱費', type: 'expense', keywords: '電気,ガス,水道' },
   { name: '通信費', type: 'expense', keywords: 'スマホ,携帯,wifi,ネット,サブスク' },
+  // 使ったお金ではなく、銀行から NISA などへ移したお金。支出に数えず、別に出す
+  { name: '貯金・投資', type: 'expense', keywords: '積立,nisa,ideco,貯金,投資', saving: true },
   { name: 'その他', type: 'expense', keywords: '' },
   { name: '給与', type: 'income', keywords: '給料,バイト代,バイト,給与,賞与,ボーナス' },
   { name: '副業', type: 'income', keywords: '副業,売上,報酬' },
