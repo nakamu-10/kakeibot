@@ -154,7 +154,7 @@ AI とつなげるのは、`OWNER_LINE_USER_ID` の LINE アカウントの家�
 
 - Claude：「設定」→「コネクタ」→「カスタムコネクタを追加」に `https://kakeibot-mcp.<サブドメイン>.workers.dev/mcp` を入れる。つなぐと許可の画面と LINE ログインが出る
 - Gemini・Muse：設定のカスタムアプリ・コネクタの追加に、同じ URL を入れる（地域やアカウントによっては、その項目がないことがある）
-- Gemini の戻り先は `https://oauth-redirect.googleusercontent.com/r/...` の形で、アカウントごとに違う。はじめてつなぐときは許可の画面が出ずに断られるので、`npx wrangler tail -c mcp/wrangler.toml` で `/authorize` の `redirect_uri` を読み、`EXTRA_REDIRECT_URIS` に入れる
+- Gemini の戻り先は `https://oauth-redirect.googleusercontent.com/r/...` の形で、アカウントごとに違う。はじめてつなぐときは許可の画面が出ずに断られる。`npx wrangler tail -c mcp/wrangler.toml` を動かしたままつなぎ直すと、ログに `redirect not allowed https://oauth-redirect.googleusercontent.com/r/...` と出るので、その URL をそのまま `EXTRA_REDIRECT_URIS` に入れる（リクエストの URL に入っている `redirect_uri=` の値はエンコードされているので使わない）
 
 ### できること
 
