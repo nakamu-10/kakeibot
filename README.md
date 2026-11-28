@@ -82,6 +82,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0010_fixed_auto_recor
 npx wrangler d1 execute kakeibo --remote --file=migrations/0011_goals.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0012_assets.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0013_goal_accounts.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0014_balance_remind.sql
 npm run deploy
 ```
 

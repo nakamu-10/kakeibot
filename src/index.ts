@@ -7,7 +7,7 @@ import shiftHtml from './shift.html';
 import uiCss from './ui.css';
 import { runPaydays } from './shift/payday';
 import { runFixedCosts } from './fixedDaily';
-import { runReminders } from './remind';
+import { runBalanceReminders, runReminders } from './remind';
 
 export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -68,6 +68,9 @@ export default {
       ctx.waitUntil(runFixedCosts(env, now));
     }
     // 毎晩21時（日本時間）：記録忘れ通知
-    if (controller.cron === '0 12 * * *') ctx.waitUntil(runReminders(env, now));
+    if (controller.cron === '0 12 * * *') {
+      ctx.waitUntil(runReminders(env, now));
+      ctx.waitUntil(runBalanceReminders(env, now));
+    }
   },
 };
