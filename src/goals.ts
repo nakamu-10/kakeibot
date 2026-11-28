@@ -1,4 +1,5 @@
-import { shiftMonth } from './util';
+import type { Repo } from './db';
+import { monthOf, shiftMonth } from './util';
 
 /**
  * 貯金の目標（Issue #18 段階3）。今いくら貯まっているかは、ユーザーか AI が入れる。
@@ -74,5 +75,17 @@ export function goalPlan(goal: Goal, thisMonth: string, surplus: number | null) 
     perMonth,
     reachMonth,
     onTrack: perMonth === null || surplus === null ? null : surplus >= perMonth,
+  };
+}
+
+/** 目標と見通しを、直近3か月（今月を除く）の収支から出す。画面と AI で同じものを使う */
+export async function loadGoals(repo: Repo, userId: string, today: string) {
+  const thisMonth = monthOf(today);
+  const [goals, basis] = await Promise.all([repo.goals(userId), repo.trend(userId, shiftMonth(thisMonth, -1), 3)]);
+  const monthlySurplus = averageSurplus(basis);
+  return {
+    monthlySurplus,
+    basis,
+    goals: goals.map((g) => ({ ...g, ...goalPlan(g, thisMonth, monthlySurplus) })),
   };
 }

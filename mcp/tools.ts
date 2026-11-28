@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { groupByParent } from '../src/category';
 import { budgetChange, entryChange, fixedCostChange, goalChange, undoBatch } from '../src/changes';
-import { averageSurplus, goalPlan, sanitizeGoal } from '../src/goals';
+import { loadGoals, sanitizeGoal } from '../src/goals';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from '../src/fixed';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
@@ -441,16 +441,7 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         'saved はユーザーが入れた額なので、古ければ今いくら貯まっているかを聞いて save_goal で直す。',
       annotations: READ_ONLY,
     },
-    async () => {
-      const thisMonth = monthOf(todayJST());
-      const [goals, trend] = await Promise.all([repo.goals(userId), repo.trend(userId, shiftMonth(thisMonth, -1), 3)]);
-      const monthlySurplus = averageSurplus(trend);
-      return result({
-        monthlySurplus,
-        basis: trend,
-        goals: goals.map((g) => ({ ...g, ...goalPlan(g, thisMonth, monthlySurplus) })),
-      });
-    },
+    async () => result(await loadGoals(repo, userId, todayJST())),
   );
 
   server.registerTool(

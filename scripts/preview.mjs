@@ -123,6 +123,11 @@ function summary(month) {
         .filter((f) => f.active)
         .reduce((t, f) => t + (f.cycle === 'yearly' ? Math.round(f.amount / 12) : f.amount), 0),
     },
+    goals: {
+      monthlySurplus: 30000,
+      basis: [],
+      goals: goals.map(previewPlan),
+    },
     changes: [
       {
         batch: 'b2',
@@ -174,6 +179,30 @@ let fixedCosts = [
   fixed({ id: 2, name: 'スマホ', amount: 2980, category: '通信費', day: 31, autoRecord: false }),
   fixed({ id: 3, name: 'Amazonプライム', amount: 5900, category: '趣味', cycle: 'yearly', month: 3, day: 15 }),
   fixed({ id: 4, name: 'ジム', amount: 7000, category: '美容', active: false }),
+];
+
+// src/goals.ts の goalPlan の代わり（node から拡張子なしの import を読めないため。架空のデータを見せるだけ）
+const previewPlan = (g) => {
+  const remaining = Math.max(0, g.target - g.saved);
+  const idx = (m) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7));
+  const monthsLeft = g.deadline ? Math.max(1, idx(g.deadline) - idx(thisMonth) + 1) : null;
+  const perMonth = monthsLeft ? Math.ceil(remaining / monthsLeft) : null;
+  const n = idx(thisMonth) + Math.ceil(remaining / 30000) - 1;
+  const reachMonth = `${Math.floor((n - 1) / 12)}-${String(((n - 1) % 12) + 1).padStart(2, '0')}`;
+  return {
+    ...g,
+    remaining,
+    progress: g.saved / g.target,
+    monthsLeft,
+    perMonth,
+    reachMonth,
+    onTrack: perMonth === null ? null : 30000 >= perMonth,
+  };
+};
+let goals = [
+  { id: 1, name: '旅行', target: 300000, saved: 60000, deadline: '2027-08', memo: '' },
+  { id: 2, name: '引っ越し', target: 400000, saved: 50000, deadline: '2027-03', memo: '' },
+  { id: 3, name: '生活防衛資金', target: 500000, saved: 0, deadline: '', memo: '' },
 ];
 
 // ---------- サーバー ----------
@@ -232,6 +261,15 @@ createServer(async (req, res) => {
   }
   if (p.startsWith('/api/fixed/')) {
     fixedCosts = fixedCosts.filter((x) => x.id !== Number(p.split('/').pop()));
+    return json(res, { ok: true });
+  }
+  if (p === '/api/goals') {
+    const g = { memo: '', ...b, id: b.id || Date.now() };
+    goals = [...goals.filter((x) => x.id !== g.id), g];
+    return json(res, g);
+  }
+  if (p.startsWith('/api/goals/')) {
+    goals = goals.filter((x) => x.id !== Number(p.split('/').pop()));
     return json(res, { ok: true });
   }
   if (p === '/api/changes/undo') return json(res, { ok: true, undone: ['追加：食費 ¥800（ランチ）'], skipped: [] });

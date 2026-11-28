@@ -3,6 +3,7 @@ import { Repo } from './db';
 import { verifyIdToken } from './line';
 import { json, monthOf, shiftMonth, todayJST } from './util';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from './fixed';
+import { loadGoals, sanitizeGoal } from './goals';
 import { undoBatch } from './changes';
 import { groupByParent, orderCategories, parentError, parentName } from './category';
 import { handleShiftApi } from './shift/api';
@@ -26,7 +27,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind, changes, fixed] = await Promise.all([
+    const [summary, trend, budget, categories, remind, changes, fixed, goals] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
       repo.budget(userId),
@@ -34,6 +35,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       repo.remind(userId),
       repo.changeBatches(userId, 10),
       repo.fixedCosts(userId),
+      loadGoals(repo, userId, todayJST()),
     ]);
     return json({
       ...summary,
@@ -45,6 +47,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       remind,
       changes,
       fixedCosts: { items: fixed, monthlyTotal: monthlyTotal(fixed) },
+      goals,
       today: todayJST(),
     });
   }
@@ -72,6 +75,19 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   const fixedMatch = path.match(/^\/fixed\/(\d+)$/);
   if (method === 'DELETE' && fixedMatch) {
     await repo.deleteFixedCost(userId, Number(fixedMatch[1]));
+    return json({ ok: true });
+  }
+
+  // 貯金の目標
+  if (method === 'POST' && path === '/goals') {
+    const g = sanitizeGoal(body);
+    if (!g.target) return json({ error: '目標の額を入れてください' }, 400);
+    if (g.id && !(await repo.getGoal(userId, g.id))) return json({ error: 'その目標は見つかりませんでした' }, 404);
+    return json(await repo.saveGoal(userId, g));
+  }
+  const goalMatch = path.match(/^\/goals\/(\d+)$/);
+  if (method === 'DELETE' && goalMatch) {
+    await repo.deleteGoal(userId, Number(goalMatch[1]));
     return json({ ok: true });
   }
 
