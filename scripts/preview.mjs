@@ -117,6 +117,7 @@ function summary(month) {
     budget,
     categories: orderCategories(categories),
     remind,
+    balanceRemind: true,
     fixedCosts: {
       items: fixedCosts,
       monthlyTotal: fixedCosts
@@ -271,6 +272,7 @@ createServer(async (req, res) => {
 
   if (p === '/api/summary') return json(res, summary(url.searchParams.get('month') || thisMonth));
   if (p === '/api/budget') return ((budget = Number(b.amount) || 0), json(res, { ok: true, budget }));
+  if (p === '/api/balance-remind') return json(res, { ok: true });
   if (p === '/api/remind') return ((remind = b.on === true), json(res, { ok: true, remind }));
   if (p === '/api/entries' && req.method === 'POST') {
     entries.push({

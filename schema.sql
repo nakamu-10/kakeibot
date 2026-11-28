@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS users (
   fix_entry_id INTEGER NOT NULL DEFAULT 0,    -- 「金額を直す」を押した記録。次に数字だけ送るとこの記録の金額を直す
   fix_until    TEXT NOT NULL DEFAULT '',      -- fix_entry_id の期限（ISO 8601）
   remind       INTEGER NOT NULL DEFAULT 0,    -- 記録忘れ通知（毎晩21時）を送るか
+  balance_remind INTEGER NOT NULL DEFAULT 1,  -- 月末の夜9時に、残高を入れていない口座を知らせるか
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

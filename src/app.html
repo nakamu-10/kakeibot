@@ -459,6 +459,12 @@
           <div id="a-accounts"></div>
           <button class="btn soft wide" id="account-new" style="margin-top: 8px">口座を追加</button>
         </section>
+        <section class="card">
+          <label class="switch">
+            <span>月末の夜9時に、今月の残高を入れていない口座を LINE で知らせる</span>
+            <input id="balance-remind" type="checkbox" />
+          </label>
+        </section>
       </div>
 
       <!-- 設定 -->
@@ -752,6 +758,8 @@
         }
         token = liff.getIDToken();
         await load();
+        const tab = new URLSearchParams(location.search).get('tab');
+        document.querySelector(`nav [data-tab="${tab}"]`)?.click();
       }
 
       async function load() {
@@ -1148,6 +1156,7 @@
         $('a-assets').textContent = yen(totals.assets);
         $('a-debts').textContent = yen(totals.debts);
         $('balance-open').style.display = accounts.some((a) => a.active) ? '' : 'none';
+        $('balance-remind').checked = data.balanceRemind;
 
         $('a-allocation').innerHTML = allocation.length
           ? `<div class="stack">${allocation
@@ -1496,6 +1505,13 @@
             : '元に戻しました',
         );
         await load();
+      };
+
+      $('balance-remind').onchange = async () => {
+        const on = $('balance-remind').checked;
+        await api('/balance-remind', { method: 'PUT', body: JSON.stringify({ on }) });
+        data.balanceRemind = on;
+        toast(on ? '月末に知らせます' : '知らせるのをやめました');
       };
 
       $('remind').onchange = async () => {

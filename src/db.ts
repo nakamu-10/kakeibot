@@ -103,6 +103,36 @@ export class Repo {
     await this.db.prepare('UPDATE users SET budget = ? WHERE id = ?').bind(amount, userId).run();
   }
 
+  // ---------- 月末の残高の知らせ ----------
+  async balanceRemind(userId: string): Promise<boolean> {
+    const r = await this.db
+      .prepare('SELECT balance_remind FROM users WHERE id = ?')
+      .bind(userId)
+      .first<{ balance_remind: number }>();
+    return r?.balance_remind !== 0;
+  }
+
+  async setBalanceRemind(userId: string, on: boolean): Promise<void> {
+    await this.db
+      .prepare('UPDATE users SET balance_remind = ? WHERE id = ?')
+      .bind(on ? 1 : 0, userId)
+      .run();
+  }
+
+  /** 知らせをオンにしていて、その月の残高をまだ入れていない口座（解約したものは除く） */
+  async accountsMissingBalance(month: string): Promise<{ userId: string; name: string }[]> {
+    const r = await this.db
+      .prepare(
+        `SELECT a.user_id AS userId, a.name FROM accounts a JOIN users u ON u.id = a.user_id
+         WHERE a.active = 1 AND u.balance_remind = 1
+           AND NOT EXISTS (SELECT 1 FROM balances b WHERE b.account_id = a.id AND b.month = ?)
+         ORDER BY a.user_id, a.id`,
+      )
+      .bind(month)
+      .all<{ userId: string; name: string }>();
+    return r.results;
+  }
+
   // ---------- 記録忘れ通知 ----------
   async remind(userId: string): Promise<boolean> {
     const r = await this.db.prepare('SELECT remind FROM users WHERE id = ?').bind(userId).first<{ remind: number }>();

@@ -28,18 +28,20 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind, changes, fixed, goals, accounts, balances] = await Promise.all([
-      repo.monthSummary(userId, month),
-      repo.trend(userId, month, 6),
-      repo.budget(userId),
-      repo.categories(userId),
-      repo.remind(userId),
-      repo.changeBatches(userId, 10),
-      repo.fixedCosts(userId),
-      loadGoals(repo, userId, todayJST()),
-      repo.accounts(userId),
-      repo.balances(userId),
-    ]);
+    const [summary, trend, budget, categories, remind, changes, fixed, goals, accounts, balances, balanceRemind] =
+      await Promise.all([
+        repo.monthSummary(userId, month),
+        repo.trend(userId, month, 6),
+        repo.budget(userId),
+        repo.categories(userId),
+        repo.remind(userId),
+        repo.changeBatches(userId, 10),
+        repo.fixedCosts(userId),
+        loadGoals(repo, userId, todayJST()),
+        repo.accounts(userId),
+        repo.balances(userId),
+        repo.balanceRemind(userId),
+      ]);
     return json({
       ...summary,
       // 親でまとめたカテゴリ別（画面で同じ計算を持たないように、ここで作る）
@@ -48,6 +50,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       budget,
       categories: orderCategories(categories),
       remind,
+      balanceRemind,
       changes,
       fixedCosts: { items: fixed, monthlyTotal: monthlyTotal(fixed) },
       goals,
@@ -140,6 +143,10 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   }
 
   // 記録忘れ通知
+  if (method === 'PUT' && path === '/balance-remind') {
+    await repo.setBalanceRemind(userId, body.on === true);
+    return json({ ok: true });
+  }
   if (method === 'PUT' && path === '/remind') {
     await repo.setRemind(userId, body.on === true);
     return json({ ok: true, remind: body.on === true });
