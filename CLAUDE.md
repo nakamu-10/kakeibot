@@ -38,6 +38,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/shift.html`：シフト収入のLIFF画面（`/app/shift`）
 - `mcp/`：外の AI（Claude・Gemini・Muse）向けの MCP サーバー。ボットとは別の Worker（`mcp/wrangler.toml`、`npm run dev:mcp`）
   - `index.ts`：OAuth の認証サーバーと `/mcp` を兼ねる（`OAuthProvider`）。`auth.ts`：許可の画面と LINE ログイン。`consent.ts`：画面と PKCE（Node で試せる）
+  - `access.ts`：つなげる AI アプリ（戻り先のドメイン）と、持ち主の LINE userId だけを通す（ADR 0016）
   - `tools.ts`：MCP のツール。D1 は `Repo` を通し、集計やシフト計算は `src/` のものを使う。`scopes.ts`：AI に許すこと
   - ツールを足すときは、読み取りか書き込みかでスコープと `annotations`（`readOnlyHint`・`destructiveHint`）を付ける
 - `src/app.html`：LIFF画面（素のJS + Chart.js、1ファイル）

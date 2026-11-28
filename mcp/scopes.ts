@@ -20,6 +20,8 @@ const WRITE_TOOLS = new Set([
   'delete_goal',
   'save_account',
   'record_balances',
+  // 家計簿は変えないが、残した文は次の AI が読む（読み取りだけのアプリに書かせない）
+  'send_feedback',
 ]);
 
 /**

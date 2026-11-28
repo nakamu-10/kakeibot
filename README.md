@@ -143,15 +143,18 @@ Claude などの AI アプリに家計簿をつなぐと、チャットで「今
    ```powershell
    npx wrangler secret put LOGIN_CHANNEL_SECRET -c mcp/wrangler.toml   # LINE ログインチャネルの「チャネルシークレット」
    npx wrangler secret put ICAL_ENCRYPTION_KEY -c mcp/wrangler.toml    # ボットと同じ値
+   npx wrangler secret put OWNER_LINE_USER_ID -c mcp/wrangler.toml     # 自分の LINE userId（LINE Developers の LINE ログインチャネル →「チャネル基本設定」→「あなたのユーザーID」）
+   npx wrangler secret put EXTRA_REDIRECT_URIS -c mcp/wrangler.toml    # Gemini でつなぐなら、自分の Gemini の戻り先（下の「AI アプリに登録する」）
    npm run deploy:mcp
    ```
 
-LINE ログインチャネルが「開発中」の間は、チャネルの管理者とテスターしかログインできません。ほかの人にも使ってもらうときは「公開」にします（公開すると開発中には戻せません）。
+AI とつなげるのは、`OWNER_LINE_USER_ID` の LINE アカウントの家計簿だけです（ほかの人がログインしても断る）。ログインのあとに戻ってよい先も、URL 全体で決めています。Claude と Muse の戻り先は `mcp/access.ts` に書いてあり、Gemini の戻り先は Google アカウントごとに違うので、シークレット `EXTRA_REDIRECT_URIS` に入れます。ほかの AI アプリをつなぐときは、その戻り先を足します（ADR 0016）。許可の画面の「書き込み」は、初めはオフです。
 
 ### AI アプリに登録する
 
 - Claude：「設定」→「コネクタ」→「カスタムコネクタを追加」に `https://kakeibot-mcp.<サブドメイン>.workers.dev/mcp` を入れる。つなぐと許可の画面と LINE ログインが出る
 - Gemini・Muse：設定のカスタムアプリ・コネクタの追加に、同じ URL を入れる（地域やアカウントによっては、その項目がないことがある）
+- Gemini の戻り先は `https://oauth-redirect.googleusercontent.com/r/...` の形で、アカウントごとに違う。はじめてつなぐときは許可の画面が出ずに断られる。`npx wrangler tail -c mcp/wrangler.toml` を動かしたままつなぎ直すと、ログに `redirect not allowed https://oauth-redirect.googleusercontent.com/r/...` と出るので、その URL をそのまま `EXTRA_REDIRECT_URIS` に入れる（リクエストの URL に入っている `redirect_uri=` の値はエンコードされているので使わない）
 
 ### できること
 
@@ -202,7 +205,7 @@ npm run db:init:local
 npm run dev
 node scripts/preview.mjs          # LIFF画面を架空のデータで開く（http://localhost:8790/app）
 npm test                          # 入力解析・日付・レシートJSONのテスト
-npm run dev:mcp                   # MCP サーバー（http://localhost:8791）。mcp/.dev.vars に LOGIN_CHANNEL_SECRET などを書く
+npm run dev:mcp                   # MCP サーバー（http://localhost:8791）。mcp/.dev.vars に LOGIN_CHANNEL_SECRET・OWNER_LINE_USER_ID などを書く
 RECEIPT_IMAGE=./receipt.jpg npm run try:receipt   # 本物のGemini APIでレシート画像を読む（.dev.vars の GEMINI_API_KEY を使う）
 ```
 

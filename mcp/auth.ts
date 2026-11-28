@@ -1,4 +1,5 @@
 import { AuthorizationError, CimdFetchError, authorizationErrorRedirect } from '@cloudflare/workers-oauth-provider';
+import { allowedRedirect, isOwner } from './access';
 import { codeChallenge, consentPage, escape, page, randomVerifier } from './consent';
 import type { McpEnv } from './env';
 
@@ -17,6 +18,16 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
   try {
     if (url.pathname === '/authorize' && req.method === 'GET') {
       const request = await oauth.parseAuthRequest(req);
+      // 知らない戻り先には、許可の画面も出さない（エラーもそこへは返さない）
+      if (!allowedRedirect(request.redirectUri, env.EXTRA_REDIRECT_URIS)) {
+        // 持ち主の Gemini の戻り先を EXTRA_REDIRECT_URIS に入れるとき、wrangler tail でこの値を写す
+        console.log('redirect not allowed', request.redirectUri);
+        return page(
+          'この AI アプリにはつなげません',
+          '<p>家計簿につなげる AI アプリは決めています（Claude・Gemini・Muse）。自分でつなごうとしたのでなければ、この画面を閉じてください。</p>',
+          400,
+        );
+      }
       const details = await oauth.describeConsent(request);
       const consent = await oauth.beginConsent(request);
       consent.headers.set('Content-Type', 'text/html; charset=utf-8');
@@ -43,12 +54,20 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
 
     if (url.pathname === '/callback') {
       const { request, data, headers } = await oauth.finishUpstream<{ verifier: string }>(req);
+      // 許可の画面を出す前にも確かめているが、エラーもトークンも返す前にもう一度確かめる
+      if (!allowedRedirect(request.redirectUri, env.EXTRA_REDIRECT_URIS)) {
+        return page('この AI アプリにはつなげません', '<p>家計簿につなげる AI アプリは決めています。</p>', 400);
+      }
       const code = url.searchParams.get('code');
       if (url.searchParams.get('error') || !code) {
         headers.set('Location', authorizationErrorRedirect(request, 'access_denied'));
         return new Response(null, { status: 302, headers });
       }
       const userId = await lineUserId(env, code, data.verifier);
+      if (!isOwner(env.OWNER_LINE_USER_ID, userId)) {
+        headers.set('Location', authorizationErrorRedirect(request, 'access_denied'));
+        return new Response(null, { status: 302, headers });
+      }
       const { redirectTo } = await oauth.completeAuthorization({
         request,
         userId,
@@ -68,7 +87,15 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
     }
     return new Response('not found', { status: 404 });
   } catch (error) {
-    if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
+    // ライブラリが戻り先へ返してよいとしたエラーも、許した戻り先のときだけ返す（ほかはこの画面で見せる）
+    if (
+      error instanceof AuthorizationError &&
+      error.redirectTo &&
+      error.redirectUri &&
+      allowedRedirect(error.redirectUri, env.EXTRA_REDIRECT_URIS)
+    ) {
+      return Response.redirect(error.redirectTo, 302);
+    }
     if (error instanceof AuthorizationError || error instanceof CimdFetchError) {
       const message =
         error instanceof AuthorizationError
