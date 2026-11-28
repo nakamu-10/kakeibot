@@ -1,6 +1,7 @@
 import type { Change, ChangeOp, ChangeTarget, StoredChange } from './changes';
 import type { Category, Entry, EntryType } from './types';
 import { sanitizeFixedCost, type FixedCost } from './fixed';
+import { sanitizeGoal, type Goal } from './goals';
 import { DEFAULT_CATEGORIES } from './parse';
 import { sanitizeJob, type Allowance, type Job } from './shift/calc';
 import { daysInMonth, shiftMonth } from './util';
@@ -395,6 +396,55 @@ export class Repo {
       .bind(userId, from)
       .all<{ date: string; category: string; amount: number; memo: string; store: string }>();
     return r.results;
+  }
+
+  // ---------- 目標 ----------
+  async goals(userId: string): Promise<Goal[]> {
+    const r = await this.db
+      .prepare(
+        "SELECT id, name, target, saved, deadline, memo FROM goals WHERE user_id = ? ORDER BY deadline = '', deadline, id",
+      )
+      .bind(userId)
+      .all();
+    return r.results.map((row) => sanitizeGoal(row));
+  }
+
+  async getGoal(userId: string, id: number): Promise<Goal | null> {
+    return (await this.goals(userId)).find((g) => g.id === id) ?? null;
+  }
+
+  /** id が 0 なら足し、そうでなければ上書きする。保存したものを返す */
+  async saveGoal(userId: string, g: Goal): Promise<Goal> {
+    const fields = [g.name, g.target, g.saved, g.deadline, g.memo];
+    if (g.id > 0) {
+      await this.db
+        .prepare(
+          'UPDATE goals SET name = ?, target = ?, saved = ?, deadline = ?, memo = ? WHERE id = ? AND user_id = ?',
+        )
+        .bind(...fields, g.id, userId)
+        .run();
+      return g;
+    }
+    const r = await this.db
+      .prepare(
+        'INSERT INTO goals (name, target, saved, deadline, memo, user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+      )
+      .bind(...fields, userId)
+      .first<{ id: number }>();
+    if (!r) throw new Error('insert failed');
+    return { ...g, id: r.id };
+  }
+
+  async deleteGoal(userId: string, id: number): Promise<void> {
+    await this.db.prepare('DELETE FROM goals WHERE id = ? AND user_id = ?').bind(id, userId).run();
+  }
+
+  /** 消した目標を、同じ id で戻す（取り消し用） */
+  async restoreGoal(userId: string, g: Goal): Promise<void> {
+    await this.db
+      .prepare('INSERT INTO goals (id, user_id, name, target, saved, deadline, memo) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(g.id, userId, g.name, g.target, g.saved, g.deadline, g.memo)
+      .run();
   }
 
   // ---------- 変更の履歴（取り消し用） ----------
