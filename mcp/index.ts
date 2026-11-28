@@ -1,4 +1,5 @@
 import { OAuthProvider, insufficientScope, type OAuthResourceContext } from '@cloudflare/workers-oauth-provider';
+import { isOwner } from './access';
 import { createMcpHandler } from 'agents/mcp/server';
 import { handleAuth } from './auth';
 import type { McpEnv } from './env';
@@ -22,7 +23,8 @@ export default {
           const { auth, props } = ctx as OAuthResourceContext<{ userId?: string }>;
           if (!auth.scope.includes(READ)) return insufficientScope(auth, [READ]);
           const userId = props.userId;
-          if (!userId) return new Response('no user', { status: 403 });
+          // ログインのときにも確かめるが、持ち主を変えたら前のトークンも使えないようにする
+          if (!userId || !isOwner(env.OWNER_LINE_USER_ID, userId)) return new Response('forbidden', { status: 403 });
           // 書き込みの許可なしに書き込みのツールを呼んだら、403 で許可を求め直してもらう
           if (!auth.scope.includes(WRITE) && req.method === 'POST') {
             const body: unknown = await req

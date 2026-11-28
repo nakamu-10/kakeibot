@@ -28,12 +28,12 @@ export function consentPage(details: ConsentDescription, handle: string): string
   const origin = details.clientDomain
     ? `<strong>${escape(details.clientDomain)}</strong> が公開しているアプリです。`
     : 'このアプリの名前は、アプリが自分で名乗ったもので、確かめられていません。';
-  // 見るのはいつも許す。書き込みはここで選べる（アプリが求めていなくても出し、初めはオン）。
-  // 先に選べるようにしておくと、書くときに許可を取り直さずに済む
+  // 見るのはいつも許す。書き込みはここで選べる（アプリが求めていなくても出す）。
+  // 読むだけのつもりで書き込みまで渡さないように、初めはオフにする
   const scopes =
     `<input type="hidden" name="scope" value="${READ}">` +
     `<p class="scope">✓ ${escape(SCOPE_LABELS[READ])}</p>` +
-    `<label class="scope"><input type="checkbox" name="scope" value="${WRITE}" checked> ${escape(SCOPE_LABELS[WRITE])}</label>` +
+    `<label class="scope"><input type="checkbox" name="scope" value="${WRITE}"> ${escape(SCOPE_LABELS[WRITE])}</label>` +
     (details.scope.includes('offline_access') ? '<input type="hidden" name="scope" value="offline_access">' : '');
   const loopback = details.redirectIsLoopback
     ? '<p class="warn">このパソコンの中のアプリに許可を渡します。自分で今つなごうとしたときだけ進めてください。</p>'

@@ -9,6 +9,8 @@ export interface McpEnv {
   /** LIFF と同じ LINE ログインチャネル（同じ userId にするため） */
   LOGIN_CHANNEL_ID: string;
   LOGIN_CHANNEL_SECRET: string;
+  /** AI とつなげる家計簿の持ち主の LINE userId（シークレット。公開リポジトリに書かない）。なければだれもつなげない */
+  OWNER_LINE_USER_ID?: string;
   /** シフト収入のカレンダーを読むため（ボットと同じ鍵） */
   ICAL_ENCRYPTION_KEY: string;
   /** OAuthProvider が入れる */

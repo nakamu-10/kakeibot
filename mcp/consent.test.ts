@@ -32,7 +32,8 @@ describe('consentPage', () => {
   it('見るのはいつも許し、書き込みは選べる（初めはオン）。知らないスコープは出さない', () => {
     const html = consentPage(details as never, 'h1');
     expect(html).toContain('<input type="hidden" name="scope" value="kakeibo:read">');
-    expect(html).toContain('<input type="checkbox" name="scope" value="kakeibo:write" checked>');
+    // 読むだけのつもりで書き込みまで渡さないように、初めはオフ
+    expect(html).toContain('<input type="checkbox" name="scope" value="kakeibo:write">');
     expect(html).not.toContain('unknown:scope');
     expect(html).toContain('<strong>claude.ai</strong>');
   });
