@@ -74,11 +74,12 @@ describe('/callback', () => {
     }
   });
 
-  it('持ち主でない LINE アカウントは access_denied で返す', async () => {
+  it('持ち主でない LINE アカウントは、AI アプリに返さずに理由を画面に出す', async () => {
     const c = callback(CLAUDE, 'Uother');
     const res = await c.run();
-    expect(res.status).toBe(302);
-    expect(res.headers.get('Location')).toBe(`${CLAUDE}?error=access_denied`);
+    expect(res.status).toBe(403);
+    expect(res.headers.get('Location')).toBeNull();
+    expect(await res.text()).toContain('この LINE アカウントでは使えません');
     expect(c.completeAuthorization).not.toHaveBeenCalled();
   });
 
