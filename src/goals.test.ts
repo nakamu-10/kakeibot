@@ -77,6 +77,9 @@ describe('goalPlan', () => {
     expect(goalPlan(trip, '2027-10', 30000)).toMatchObject({ monthsLeft: 1, perMonth: 240000 });
     expect(goalPlan({ ...trip, deadline: '' }, '2026-11', 30000)).toMatchObject({ perMonth: null, onTrack: null });
   });
+  it('届いていれば、余りがマイナスでも間に合っている', () => {
+    expect(goalPlan({ ...trip, saved: 330000 }, '2026-11', -30000)).toMatchObject({ perMonth: 0, onTrack: true });
+  });
   it('届いたら残り0、今月で達成', () => {
     expect(goalPlan({ ...trip, saved: 300000 }, '2026-11', 0)).toMatchObject({
       remaining: 0,

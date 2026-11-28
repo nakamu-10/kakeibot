@@ -20,6 +20,7 @@ import {
   type Balance,
 } from '../src/assets';
 import { loadGoals, sanitizeGoal } from '../src/goals';
+import { financialOverview } from '../src/overview';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from '../src/fixed';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
@@ -612,6 +613,52 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       }
       await repo.recordChanges(userId, crypto.randomUUID(), changes);
       return result({ month, recorded: changes.map((c) => c.summary) });
+    },
+  );
+
+  // ---------- 相談のまとめ ----------
+  server.registerTool(
+    'get_financial_overview',
+    {
+      title: 'お金の相談のまとめ',
+      description:
+        'お金の相談を始めるときに最初に呼ぶ。直近3か月（今月を除く。記録のない月は数えない）の収入・支出・余りの平均、' +
+        'カテゴリごとの支出の平均と割合、固定費（毎月にならした額）、予算と平均の差、預金・現金で生活費の何か月分を持っているか、' +
+        '目標ごとの毎月の額と見通し（totalPerMonth と monthlySurplus を比べる）、資産の合計・分け方・期間中の変化（積み立てた分と値動き）を返す。' +
+        '相談の例：毎月いくら貯金・投資に回せるか、目標から逆算するといくら要るか、資産の分け方の見直し、資産の推移のふりかえり、お金の使い方。' +
+        'warnings に入っていることは、答える前にユーザーに確かめる（収入を記録していない月があると余りが実際より少なく出る、など）。' +
+        '細かく見るときは search_entries・get_summary・list_fixed_costs・list_goals・get_assets を使う。' +
+        '銘柄や商品を名指しで勧めず、数字をもとに考え方と選び方を一緒に整理する。',
+      annotations: READ_ONLY,
+    },
+    async () => {
+      const today = todayJST();
+      const thisMonth = monthOf(today);
+      const months = [3, 2, 1].map((k) => shiftMonth(thisMonth, -k));
+      const [summaries, categories, fixedCosts, goals, accounts, balances, budget] = await Promise.all([
+        Promise.all(months.map((m) => repo.monthSummary(userId, m))),
+        repo.categories(userId),
+        repo.fixedCosts(userId),
+        loadGoals(repo, userId, today),
+        repo.accounts(userId),
+        repo.balances(userId),
+        repo.budget(userId),
+      ]);
+      return result(
+        financialOverview({
+          thisMonth,
+          months: summaries.map((s) => ({
+            month: s.month,
+            income: s.income,
+            expense: s.expense,
+            byCategory: Object.fromEntries(groupByParent(s.byCategory, categories).map((g) => [g.name, g.total])),
+          })),
+          fixedCosts,
+          budget,
+          goals,
+          assets: assetSummary(accounts, balances, thisMonth, 12),
+        }),
+      );
     },
   );
 
