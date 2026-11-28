@@ -344,7 +344,8 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       title: '固定費・サブスクの一覧',
       description:
         '登録した固定費・サブスク（家賃・スマホ・サブスクなど）。monthlyTotal は、やめていないものを毎月かかる額にならした合計（毎年のものは12で割る）。' +
-        '毎月いくら貯金・投資に回せるかは、収入から、固定費と、固定費以外の支出の平均を引いて考える。',
+        'autoRecord が true のものは、払う日の朝に家計簿へ支出として自動で記録される。手で記録したものも含め、記録された固定費は家計簿の支出に入っている。' +
+        '毎月いくら貯金・投資に回せるかは、収入の平均から支出の平均を引いて考え、固定費をもう一度は引かない。年払いのように月によって出ない分は、monthlyTotal でならして考える。',
       annotations: READ_ONLY,
     },
     async () => {
@@ -386,6 +387,10 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         day: z.number().int().min(1).max(31).default(1).describe('払う日（31は月末）'),
         month: z.number().int().min(0).max(12).optional().describe('毎年のとき、払う月（1〜12）。毎月なら省くか 0'),
         active: z.boolean().default(true),
+        autoRecord: z
+          .boolean()
+          .default(true)
+          .describe('払う日の朝に家計簿へ自動で記録する。true のものは手で記録しないようユーザーに伝える'),
         memo: z.string().max(100).optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },

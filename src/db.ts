@@ -119,7 +119,7 @@ export class Repo {
     const r = await this.db
       .prepare(
         `SELECT id FROM users u WHERE remind = 1 AND NOT EXISTS (
-           SELECT 1 FROM entries e WHERE e.user_id = u.id AND e.source != 'payday' AND e.created_at >= ?
+           SELECT 1 FROM entries e WHERE e.user_id = u.id AND e.source NOT IN ('payday', 'fixed') AND e.created_at >= ?
          )`,
       )
       .bind(sinceUtc)
@@ -281,11 +281,13 @@ export class Repo {
   async fixedCosts(userId: string): Promise<FixedCost[]> {
     const r = await this.db
       .prepare(
-        'SELECT id, name, amount, category, cycle, day, month, active, memo FROM fixed_costs WHERE user_id = ? ORDER BY active DESC, amount DESC, id',
+        'SELECT id, name, amount, category, cycle, day, month, active, auto_record, memo FROM fixed_costs WHERE user_id = ? ORDER BY active DESC, amount DESC, id',
       )
       .bind(userId)
       .all();
-    return r.results.map((row) => sanitizeFixedCost({ ...row, active: row.active === 1 }));
+    return r.results.map((row) =>
+      sanitizeFixedCost({ ...row, active: row.active === 1, autoRecord: row.auto_record === 1 }),
+    );
   }
 
   async getFixedCost(userId: string, id: number): Promise<FixedCost | null> {
@@ -294,11 +296,21 @@ export class Repo {
 
   /** id が 0 なら足し、そうでなければ上書きする。保存したものを返す */
   async saveFixedCost(userId: string, f: FixedCost): Promise<FixedCost> {
-    const fields = [f.name, f.amount, f.category, f.cycle, f.day, f.month, f.active ? 1 : 0, f.memo];
+    const fields = [
+      f.name,
+      f.amount,
+      f.category,
+      f.cycle,
+      f.day,
+      f.month,
+      f.active ? 1 : 0,
+      f.autoRecord ? 1 : 0,
+      f.memo,
+    ];
     if (f.id > 0) {
       await this.db
         .prepare(
-          'UPDATE fixed_costs SET name = ?, amount = ?, category = ?, cycle = ?, day = ?, month = ?, active = ?, memo = ? WHERE id = ? AND user_id = ?',
+          'UPDATE fixed_costs SET name = ?, amount = ?, category = ?, cycle = ?, day = ?, month = ?, active = ?, auto_record = ?, memo = ? WHERE id = ? AND user_id = ?',
         )
         .bind(...fields, f.id, userId)
         .run();
@@ -306,7 +318,7 @@ export class Repo {
     }
     const r = await this.db
       .prepare(
-        'INSERT INTO fixed_costs (name, amount, category, cycle, day, month, active, memo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+        'INSERT INTO fixed_costs (name, amount, category, cycle, day, month, active, auto_record, memo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
       )
       .bind(...fields, userId)
       .first<{ id: number }>();
@@ -322,10 +334,53 @@ export class Repo {
   async restoreFixedCost(userId: string, f: FixedCost): Promise<void> {
     await this.db
       .prepare(
-        'INSERT INTO fixed_costs (id, user_id, name, amount, category, cycle, day, month, active, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO fixed_costs (id, user_id, name, amount, category, cycle, day, month, active, auto_record, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .bind(f.id, userId, f.name, f.amount, f.category, f.cycle, f.day, f.month, f.active ? 1 : 0, f.memo)
+      .bind(
+        f.id,
+        userId,
+        f.name,
+        f.amount,
+        f.category,
+        f.cycle,
+        f.day,
+        f.month,
+        f.active ? 1 : 0,
+        f.autoRecord ? 1 : 0,
+        f.memo,
+      )
       .run();
+  }
+
+  /** 自動で記録する固定費（全員分）。払う日かどうかは呼ぶ側で見る */
+  async autoFixedCosts(): Promise<(FixedCost & { userId: string })[]> {
+    const r = await this.db
+      .prepare(
+        'SELECT id, user_id, name, amount, category, cycle, day, month, active, auto_record, memo FROM fixed_costs WHERE active = 1 AND auto_record = 1',
+      )
+      .all();
+    return r.results.map((row) => ({
+      ...sanitizeFixedCost({ ...row, active: true, autoRecord: true }),
+      userId: String(row.user_id),
+    }));
+  }
+
+  /** 固定費を、その日の分として家計簿に記録する。同じ日にもう記録していれば何もせず null */
+  async recordFixedCost(userId: string, f: FixedCost, date: string): Promise<number | null> {
+    const claim = await this.db
+      .prepare('UPDATE fixed_costs SET last_recorded = ? WHERE id = ? AND user_id = ? AND last_recorded != ?')
+      .bind(date, f.id, userId, date)
+      .run();
+    if (claim.meta.changes === 0) return null;
+    await this.ensureCategory(userId, f.category, 'expense');
+    return this.addEntry(userId, {
+      type: 'expense',
+      category: f.category,
+      amount: f.amount,
+      memo: f.name,
+      date,
+      source: 'fixed',
+    });
   }
 
   /** 固定費の候補を探すため、期間の支出を読む */

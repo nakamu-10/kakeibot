@@ -1,6 +1,8 @@
+import { paysOn } from './shift/text';
+
 /**
  * 固定費・サブスク（Issue #18 段階2）。家賃・スマホ・サブスクのように、決まって出ていくお金。
- * 登録するだけで、家計簿には自動で記録しない（口座から払って手でも記録していると二重になるため）
+ * 自動で記録するかは固定費ごとに選ぶ。自動にしたものは手で記録しない、と決めてもらうことで二重を防ぐ（ADR 0013）
  */
 
 type Cycle = 'monthly' | 'yearly';
@@ -18,6 +20,8 @@ export interface FixedCost {
   month: number;
   /** やめたけれど記録として残しておくものは false */
   active: boolean;
+  /** 払う日の朝に家計簿へ記録する */
+  autoRecord: boolean;
   memo: string;
 }
 
@@ -39,6 +43,7 @@ export function sanitizeFixedCost(input: Record<string, unknown>): FixedCost {
     day: clamp(Math.round(num(input.day, 1)), 1, 31),
     month: cycle === 'yearly' ? clamp(Math.round(num(input.month, 1)), 1, 12) : 0,
     active: input.active !== false,
+    autoRecord: input.autoRecord !== false,
     memo: (typeof input.memo === 'string' ? input.memo.trim() : '').slice(0, 100),
   };
 }
@@ -60,8 +65,16 @@ export function sameFixedCost(a: FixedCost, b: FixedCost): boolean {
     a.day === b.day &&
     a.month === b.month &&
     a.active === b.active &&
+    a.autoRecord === b.autoRecord &&
     a.memo === b.memo
   );
+}
+
+/** その日に家計簿へ自動で記録するか。月末より後の日は月末に払う */
+export function recordsOn(f: Pick<FixedCost, 'active' | 'autoRecord' | 'cycle' | 'day' | 'month'>, date: string) {
+  if (!f.active || !f.autoRecord) return false;
+  if (f.cycle === 'yearly' && Number(date.slice(5, 7)) !== f.month) return false;
+  return paysOn(f.day, date);
 }
 
 interface PaidEntry {

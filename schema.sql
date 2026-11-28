@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS entries (
   memo       TEXT NOT NULL DEFAULT '',
   store      TEXT NOT NULL DEFAULT '',
   date       TEXT NOT NULL,                   -- 'YYYY-MM-DD'（日本時間）
-  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app' | 'payday' | 'ai'
+  source     TEXT NOT NULL DEFAULT 'text',    -- 'text' | 'receipt' | 'app' | 'payday' | 'ai' | 'fixed'
   edit_count INTEGER NOT NULL DEFAULT 0,      -- 記録を直した回数（使い方から改善案を出すため）
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS changes (
 
 CREATE INDEX IF NOT EXISTS idx_changes_user ON changes (user_id, id);
 
--- 固定費・サブスク（登録するだけで、家計簿には自動で記録しない）
+-- 固定費・サブスク
 CREATE TABLE IF NOT EXISTS fixed_costs (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id    TEXT NOT NULL,
@@ -130,6 +130,8 @@ CREATE TABLE IF NOT EXISTS fixed_costs (
   day        INTEGER NOT NULL DEFAULT 1,        -- 払う日（31 = 月末）
   month      INTEGER NOT NULL DEFAULT 0,        -- 毎年のとき払う月。毎月なら 0
   active     INTEGER NOT NULL DEFAULT 1,        -- やめたら 0（記録として残す）
+  auto_record INTEGER NOT NULL DEFAULT 1,       -- 1 なら払う日の朝に家計簿へ記録する
+  last_recorded TEXT NOT NULL DEFAULT '',       -- 最後に自動で記録した日（同じ日に2回記録しない）
   memo       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

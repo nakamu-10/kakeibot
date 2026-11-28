@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findRecurring, monthlyAmount, monthlyTotal, sameFixedCost, sanitizeFixedCost } from './fixed';
+import { findRecurring, monthlyAmount, monthlyTotal, recordsOn, sameFixedCost, sanitizeFixedCost } from './fixed';
 
 describe('sanitizeFixedCost', () => {
   it('型と範囲をそろえる。毎月なら月は 0', () => {
@@ -12,6 +12,7 @@ describe('sanitizeFixedCost', () => {
       day: 31,
       month: 0,
       active: true,
+      autoRecord: true,
       memo: '',
     });
     expect(sanitizeFixedCost({ cycle: 'yearly', month: 13, active: false })).toMatchObject({
@@ -41,6 +42,27 @@ describe('sameFixedCost', () => {
     const a = sanitizeFixedCost({ id: 1, name: '家賃', amount: 60000 });
     expect(sameFixedCost(a, { ...a, id: 2 })).toBe(true);
     expect(sameFixedCost(a, { ...a, amount: 61000 })).toBe(false);
+  });
+});
+
+describe('recordsOn', () => {
+  const rent = sanitizeFixedCost({ name: '家賃', amount: 60000, day: 27 });
+  it('毎月は払う日に。月末より後の日は月末に', () => {
+    expect(recordsOn(rent, '2026-11-27')).toBe(true);
+    expect(recordsOn(rent, '2026-11-26')).toBe(false);
+    const end = { ...rent, day: 31 };
+    expect(recordsOn(end, '2026-11-30')).toBe(true);
+    expect(recordsOn(end, '2027-02-28')).toBe(true);
+    expect(recordsOn(end, '2026-12-30')).toBe(false);
+  });
+  it('毎年は払う月だけ', () => {
+    const prime = { ...rent, cycle: 'yearly' as const, month: 3, day: 15 };
+    expect(recordsOn(prime, '2027-03-15')).toBe(true);
+    expect(recordsOn(prime, '2026-11-15')).toBe(false);
+  });
+  it('やめたもの・自動で記録しないものは記録しない', () => {
+    expect(recordsOn({ ...rent, active: false }, '2026-11-27')).toBe(false);
+    expect(recordsOn({ ...rent, autoRecord: false }, '2026-11-27')).toBe(false);
   });
 });
 
