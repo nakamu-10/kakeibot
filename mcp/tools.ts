@@ -455,7 +455,8 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         '貯金の目標（金額・期限・今貯まっている額）と見通し。monthlySurplus は直近3か月（今月を除く）の収支の平均で、記録のない月は数えない。' +
         'perMonth は期限までに届くための毎月の額、reachMonth と onTrack は、余りをすべてその目標に回したときに届く月と、期限に間に合うか。' +
         '目標が複数あれば余りを分け合うので、perMonth の合計と monthlySurplus を比べて考える。' +
-        'saved はユーザーが入れた額なので、古ければ今いくら貯まっているかを聞いて save_goal で直す。',
+        'accountIds で口座をつないだ目標の saved は、口座の今の残高の合計（残高は get_assets の month の時点）。' +
+        'つないでいない目標の saved はユーザーが入れた額なので、古ければ今いくら貯まっているかを聞いて save_goal で直すか、口座をつなぐ。',
       annotations: READ_ONLY,
     },
     async () => result(await loadGoals(repo, userId, todayJST())),
@@ -471,12 +472,19 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         id: z.number().int().optional(),
         name: z.string().min(1).max(30),
         target: z.number().int().positive().describe('目標の額（円）'),
-        saved: z.number().int().min(0).default(0).describe('今貯まっている額（円）'),
+        saved: z.number().int().min(0).default(0).describe('今貯まっている額（円）。accountIds を渡すときは使わない'),
+        accountIds: z
+          .array(z.number().int())
+          .max(10)
+          .default([])
+          .describe(
+            'この目標のために貯めている口座（get_assets の id。借金は除く）。渡すと、今貯まっている額は口座の今の残高の合計になる',
+          ),
         deadline: z
           .string()
-          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .regex(/^(\d{4}-(0[1-9]|1[0-2]))?$/)
           .optional()
-          .describe("期限の月 'YYYY-MM'。なければ省く"),
+          .describe("期限の月 'YYYY-MM'。なければ省くか ''"),
         memo: z.string().max(100).optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -484,6 +492,10 @@ export function createServer(env: McpEnv, userId: string): McpServer {
     async (args) => {
       const before = args.id ? await repo.getGoal(userId, args.id) : null;
       if (args.id && !before) return error(`id ${args.id} の目標が見つかりません。`);
+      const accounts = await repo.accounts(userId);
+      const wrong = args.accountIds.find((id) => !accounts.some((a) => a.id === id && a.kind !== 'debt'));
+      if (wrong)
+        return error(`id ${wrong} の口座が見つからないか、借金の口座です。get_assets の id を使ってください。`);
       const saved = await repo.saveGoal(userId, sanitizeGoal({ ...args, id: args.id ?? 0 }));
       await repo.recordChanges(userId, crypto.randomUUID(), [goalChange(before ? 'update' : 'insert', before, saved)]);
       return result({ before, after: saved });

@@ -69,6 +69,9 @@ describe('goalChange', () => {
       summary: '目標を追加：旅行 ¥60,000/¥300,000（2027年8月まで）',
     });
     expect(goalChange('delete', { ...trip, deadline: '' }, null).summary).toBe('目標を削除：旅行 ¥60,000/¥300,000');
+    expect(goalChange('update', trip, { ...trip, accountIds: [1, 2] }).summary).toBe(
+      '目標を変更：旅行 ¥60,000/¥300,000（2027年8月まで） → 旅行 口座2つから/¥300,000（2027年8月まで）',
+    );
   });
 });
 

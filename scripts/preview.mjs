@@ -200,9 +200,9 @@ const previewPlan = (g) => {
   };
 };
 let goals = [
-  { id: 1, name: '旅行', target: 300000, saved: 60000, deadline: '2027-08', memo: '' },
-  { id: 2, name: '引っ越し', target: 400000, saved: 50000, deadline: '2027-03', memo: '' },
-  { id: 3, name: '生活防衛資金', target: 500000, saved: 0, deadline: '', memo: '' },
+  { id: 1, name: '旅行', target: 300000, saved: 60000, accountIds: [], deadline: '2027-08', memo: '' },
+  { id: 2, name: '引っ越し', target: 400000, saved: 50000, accountIds: [], deadline: '2027-03', memo: '' },
+  { id: 3, name: '生活防衛資金', target: 500000, saved: 0, accountIds: [], deadline: '', memo: '' },
 ];
 
 // ---------- サーバー ----------
