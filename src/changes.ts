@@ -10,7 +10,7 @@ import { yen } from './util';
  * 1回の依頼（ツールの1回の呼び出し）で変えたものを、同じ batch にまとめて残す
  */
 
-export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost' | 'goal' | 'account' | 'balance';
+export type ChangeTarget = 'entry' | 'budget' | 'category_budget' | 'fixed_cost' | 'goal' | 'account' | 'balance';
 export type ChangeOp = 'insert' | 'update' | 'delete';
 
 export interface Change {
@@ -52,6 +52,18 @@ export function budgetChange(before: number, after: number): Change {
     before: { amount: before },
     after: { amount: after },
     summary: `予算：${show(before)} → ${show(after)}`,
+  };
+}
+
+export function categoryBudgetChange(category: string, before: number, after: number): Change {
+  const show = (n: number) => (n ? yen(n) : 'なし');
+  return {
+    target: 'category_budget',
+    targetId: 0,
+    op: before ? (after ? 'update' : 'delete') : 'insert',
+    before: { category, amount: before },
+    after: { category, amount: after },
+    summary: `${category}の予算：${show(before)} → ${show(after)}`,
   };
 }
 
@@ -186,6 +198,18 @@ export async function undoBatch(
         continue;
       }
       await repo.setBudget(userId, before);
+      undone.push(c.summary);
+      continue;
+    }
+    if (c.target === 'category_budget') {
+      const before = c.before as { category: string; amount: number };
+      const after = c.after as { category: string; amount: number };
+      if ((await repo.categoryBudget(userId, after.category)) !== after.amount) {
+        skipped.push(`${c.summary}（その後に変わったので戻していません）`);
+        continue;
+      }
+      if (before.amount) await repo.setCategoryBudget(userId, before.category, before.amount);
+      else await repo.deleteCategoryBudget(userId, after.category);
       undone.push(c.summary);
       continue;
     }

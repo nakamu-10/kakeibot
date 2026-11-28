@@ -3,6 +3,7 @@ import {
   accountChange,
   balanceChange,
   budgetChange,
+  categoryBudgetChange,
   entryChange,
   fixedCostChange,
   goalChange,
@@ -43,6 +44,24 @@ describe('budgetChange', () => {
   it('予算の要約。0 は「なし」', () => {
     expect(budgetChange(0, 50000).summary).toBe('予算：なし → ¥50,000');
     expect(budgetChange(50000, 45000)).toMatchObject({ before: { amount: 50000 }, after: { amount: 45000 } });
+  });
+});
+
+describe('categoryBudgetChange', () => {
+  it('カテゴリ別予算の要約。追加・変更・削除', () => {
+    expect(categoryBudgetChange('食費', 0, 30000)).toMatchObject({
+      target: 'category_budget',
+      op: 'insert',
+      summary: '食費の予算：なし → ¥30,000',
+    });
+    expect(categoryBudgetChange('食費', 30000, 25000)).toMatchObject({
+      op: 'update',
+      summary: '食費の予算：¥30,000 → ¥25,000',
+    });
+    expect(categoryBudgetChange('食費', 25000, 0)).toMatchObject({
+      op: 'delete',
+      summary: '食費の予算：¥25,000 → なし',
+    });
   });
 });
 

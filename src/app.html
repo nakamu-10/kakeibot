@@ -79,6 +79,26 @@
         color: var(--sub);
         padding: 2px 0 0 14px;
       }
+      .cat-budget-sub {
+        font-size: 13px;
+        color: var(--sub);
+        margin-top: 4px;
+      }
+      .cat-budget-sub.expense {
+        color: var(--red);
+      }
+      .cat-budget-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 4px 0;
+      }
+      .cat-budget-row input {
+        width: 130px;
+        min-height: 44px;
+        text-align: right;
+      }
       /* 支出全体を100%にした1本の帯 */
       .stack {
         display: flex;
@@ -488,6 +508,12 @@
             <button class="btn" id="budget-save">保存</button>
           </div>
           <p class="muted" style="margin: 8px 0 0">空にすると予算を出しません。</p>
+          <div style="margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line)">
+            <h3 style="margin: 0 0 8px; font-size: 15px">カテゴリ別の予算</h3>
+            <div id="cat-budgets-list"></div>
+            <button class="btn soft wide" id="cat-budgets-save" style="margin-top: 10px">カテゴリ別予算を保存</button>
+            <p class="muted" style="margin: 8px 0 0">空にするとそのカテゴリの予算を解除します。</p>
+          </div>
         </section>
         <section class="card">
           <h2>固定費・サブスク</h2>
@@ -820,19 +846,26 @@
         // 支出に占める割合：上に1本の帯、下にカテゴリごとの割合と金額
         const total = data.expense || 1;
         const pct = (v) => Math.round((v / total) * 100);
+        const catBudgets = data.categoryBudgets || [];
         $('cat-list').innerHTML = data.groups.length
           ? `<div class="stack">${data.groups
               .map((g, i) => `<div style="flex:${g.total};background:${color(i)}" title="${esc(g.name)}"></div>`)
               .join('')}</div>` +
             data.groups
-              .map(
-                (g, i) => `<div class="cat-row">
+              .map((g, i) => {
+                const cb = catBudgets.find((b) => b.categoryName === g.name);
+                const rate = cb && cb.amount > 0 ? g.total / cb.amount : 0;
+                const budgetHtml = cb
+                  ? `<div class="cat-budget-sub ${rate > 1 ? 'expense' : ''}">予算 ${yen(cb.amount)} のうち ${Math.round(rate * 100)}%（${rate > 1 ? `${yen(g.total - cb.amount)} 超過` : `残り ${yen(cb.amount - g.total)}`}）</div>`
+                  : '';
+                return `<div class="cat-row">
           <div class="top"><span><span class="dot" style="background:${color(i)}"></span>${esc(g.name)}</span>
             <span class="share num">${pct(g.total)}%</span><span class="num">${yen(g.total)}</span></div>
           <div class="meter"><div style="width:${pct(g.total)}%;background:${color(i)}"></div></div>
+          ${budgetHtml}
           ${g.children.map((c) => `<div class="child"><span>${esc(c.name)}</span><span class="num">${yen(c.amount)}</span></div>`).join('')}
-        </div>`,
-              )
+        </div>`;
+              })
               .join('')
           : '<p class="muted">まだ記録がありません。下の「＋ 記録する」から付けられます。</p>';
 
@@ -906,6 +939,17 @@
         renderGoals();
         renderAssets();
         $('budget-input').value = data.budget || '';
+        const catBudgets = data.categoryBudgets || [];
+        $('cat-budgets-list').innerHTML = data.categories
+          .filter((c) => c.type === 'expense' && !c.parentId && !c.saving)
+          .map((c) => {
+            const amt = catBudgets.find((b) => b.categoryName === c.name)?.amount || '';
+            return `<div class="cat-budget-row">
+          <span>${esc(c.name)}</span>
+          <input type="number" inputmode="numeric" placeholder="なし" data-cat-budget="${esc(c.name)}" value="${amt}" aria-label="${esc(c.name)}の予算" />
+        </div>`;
+          })
+          .join('');
         $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
           $('cats-' + type).innerHTML = data.categories
@@ -1517,6 +1561,22 @@
         const amount = Number($('budget-input').value) || 0;
         await api('/budget', { method: 'PUT', body: JSON.stringify({ amount }) });
         toast(amount ? `予算を ${yen(amount)} にしました` : '予算を出さないようにしました');
+        await load();
+      };
+      $('cat-budgets-save').onclick = async () => {
+        const current = new Map((data.categoryBudgets || []).map((b) => [b.categoryName, b.amount]));
+        const inputs = [...document.querySelectorAll('#cat-budgets-list [data-cat-budget]')];
+        const updates = inputs
+          .map((el) => ({
+            category: el.dataset.catBudget,
+            amount: Math.max(0, Math.round(Number(el.value) || 0)),
+          }))
+          .filter((u) => (current.get(u.category) ?? 0) !== u.amount);
+        if (!updates.length) return toast('変更はありません');
+        for (const u of updates) {
+          await api('/category-budgets', { method: 'PUT', body: JSON.stringify(u) });
+        }
+        toast('カテゴリ別予算を保存しました');
         await load();
       };
       /** AI（Claude など）が加えた変更。1回の依頼ごとに、元に戻せる */

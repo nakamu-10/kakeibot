@@ -85,20 +85,28 @@ export class Repo {
           userId,
         ),
     ];
-    // 名前を変えたら過去の記録も付け替える
+    // 名前を変えたら過去の記録とカテゴリ別予算も付け替える
     if (fields.name && fields.name !== cur.name) {
       stmts.push(
         this.db
           .prepare('UPDATE entries SET category = ? WHERE user_id = ? AND category = ?')
+          .bind(fields.name, userId, cur.name),
+        this.db
+          .prepare('UPDATE category_budgets SET category_name = ? WHERE user_id = ? AND category_name = ?')
           .bind(fields.name, userId, cur.name),
       );
     }
     await this.db.batch(stmts);
   }
 
-  /** 消したカテゴリの子は、一番上の段に上げる（記録はそのまま残る） */
+  /** 消したカテゴリの子は、一番上の段に上げる（記録はそのまま残る）。予算も消す */
   async deleteCategory(userId: string, id: number): Promise<void> {
     await this.db.batch([
+      this.db
+        .prepare(
+          'DELETE FROM category_budgets WHERE user_id = ? AND category_name = (SELECT name FROM categories WHERE id = ? AND user_id = ?)',
+        )
+        .bind(userId, id, userId),
       this.db.prepare('UPDATE categories SET parent_id = 0 WHERE parent_id = ? AND user_id = ?').bind(id, userId),
       this.db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').bind(id, userId),
     ]);
@@ -121,6 +129,42 @@ export class Repo {
 
   async setBudget(userId: string, amount: number): Promise<void> {
     await this.db.prepare('UPDATE users SET budget = ? WHERE id = ?').bind(amount, userId).run();
+  }
+
+  // ---------- カテゴリ別予算 ----------
+  async categoryBudgets(userId: string): Promise<{ categoryName: string; amount: number }[]> {
+    const r = await this.db
+      .prepare(
+        'SELECT category_name AS categoryName, amount FROM category_budgets WHERE user_id = ? ORDER BY category_name',
+      )
+      .bind(userId)
+      .all<{ categoryName: string; amount: number }>();
+    return r.results;
+  }
+
+  async categoryBudget(userId: string, categoryName: string): Promise<number> {
+    const r = await this.db
+      .prepare('SELECT amount FROM category_budgets WHERE user_id = ? AND category_name = ?')
+      .bind(userId, categoryName)
+      .first<{ amount: number }>();
+    return r?.amount ?? 0;
+  }
+
+  async setCategoryBudget(userId: string, categoryName: string, amount: number): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT INTO category_budgets (user_id, category_name, amount) VALUES (?, ?, ?)
+         ON CONFLICT (user_id, category_name) DO UPDATE SET amount = excluded.amount`,
+      )
+      .bind(userId, categoryName, amount)
+      .run();
+  }
+
+  async deleteCategoryBudget(userId: string, categoryName: string): Promise<void> {
+    await this.db
+      .prepare('DELETE FROM category_budgets WHERE user_id = ? AND category_name = ?')
+      .bind(userId, categoryName)
+      .run();
   }
 
   // ---------- 月末の残高の知らせ ----------

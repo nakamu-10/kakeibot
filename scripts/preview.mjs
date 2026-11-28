@@ -86,6 +86,10 @@ let entries = [
     source: store ? 'receipt' : 'text',
   }));
 let budget = 40000;
+let categoryBudgets = [
+  { categoryName: '食費', amount: 15000 },
+  { categoryName: '交際費', amount: 3000 },
+];
 let remind = false;
 
 function summary(month) {
@@ -123,6 +127,7 @@ function summary(month) {
     entries: list,
     trend,
     budget,
+    categoryBudgets,
     categories: orderCategories(categories),
     remind,
     balanceRemind: true,
@@ -280,6 +285,13 @@ createServer(async (req, res) => {
 
   if (p === '/api/summary') return json(res, summary(url.searchParams.get('month') || thisMonth));
   if (p === '/api/budget') return ((budget = Number(b.amount) || 0), json(res, { ok: true, budget }));
+  if (p === '/api/category-budgets') {
+    const category = String(b.category || '');
+    const amount = Math.max(0, Math.round(Number(b.amount) || 0));
+    categoryBudgets = categoryBudgets.filter((x) => x.categoryName !== category);
+    if (amount) categoryBudgets.push({ categoryName: category, amount });
+    return json(res, { ok: true, category, amount });
+  }
   if (p === '/api/balance-remind') return json(res, { ok: true });
   if (p === '/api/remind') return ((remind = b.on === true), json(res, { ok: true, remind }));
   if (p === '/api/entries' && req.method === 'POST') {

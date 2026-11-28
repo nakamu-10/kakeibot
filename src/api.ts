@@ -28,26 +28,40 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind, changes, fixed, goals, accounts, balances, balanceRemind] =
-      await Promise.all([
-        repo.monthSummary(userId, month),
-        repo.trend(userId, month, 6),
-        repo.budget(userId),
-        repo.categories(userId),
-        repo.remind(userId),
-        repo.changeBatches(userId, 10),
-        repo.fixedCosts(userId),
-        loadGoals(repo, userId, todayJST()),
-        repo.accounts(userId),
-        repo.balances(userId),
-        repo.balanceRemind(userId),
-      ]);
+    const [
+      summary,
+      trend,
+      budget,
+      categories,
+      remind,
+      changes,
+      fixed,
+      goals,
+      accounts,
+      balances,
+      balanceRemind,
+      catBudgets,
+    ] = await Promise.all([
+      repo.monthSummary(userId, month),
+      repo.trend(userId, month, 6),
+      repo.budget(userId),
+      repo.categories(userId),
+      repo.remind(userId),
+      repo.changeBatches(userId, 10),
+      repo.fixedCosts(userId),
+      loadGoals(repo, userId, todayJST()),
+      repo.accounts(userId),
+      repo.balances(userId),
+      repo.balanceRemind(userId),
+      repo.categoryBudgets(userId),
+    ]);
     return json({
       ...summary,
       // 親でまとめたカテゴリ別（画面で同じ計算を持たないように、ここで作る）
       groups: groupByParent(summary.byCategory, categories),
       trend,
       budget,
+      categoryBudgets: catBudgets,
       categories: orderCategories(categories),
       remind,
       balanceRemind,
@@ -64,6 +78,19 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const amount = Math.max(0, Math.round(Number(body.amount) || 0));
     await repo.setBudget(userId, amount);
     return json({ ok: true, budget: amount });
+  }
+
+  // カテゴリ別予算
+  if (method === 'PUT' && path === '/category-budgets') {
+    const category = typeof body.category === 'string' ? body.category.trim() : '';
+    const amount = Math.max(0, Math.round(Number(body.amount) || 0));
+    if (!category) return json({ error: 'カテゴリを指定してください' }, 400);
+    if (amount) {
+      await repo.setCategoryBudget(userId, category, amount);
+    } else {
+      await repo.deleteCategoryBudget(userId, category);
+    }
+    return json({ ok: true, category, amount });
   }
 
   // 固定費・サブスク（画面からの変更は人が見ているので、変更の履歴には残さない。ADR 0012）

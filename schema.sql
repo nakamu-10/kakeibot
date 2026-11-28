@@ -179,3 +179,11 @@ CREATE TABLE IF NOT EXISTS balances (
 );
 
 CREATE INDEX IF NOT EXISTS idx_balances_user ON balances (user_id, month);
+
+-- カテゴリ別予算（ADR 0017）
+CREATE TABLE IF NOT EXISTS category_budgets (
+  user_id       TEXT NOT NULL,
+  category_name TEXT NOT NULL,  -- 親カテゴリの名前（categories.name）
+  amount        INTEGER NOT NULL,  -- 月の予算（円）
+  PRIMARY KEY (user_id, category_name)
+);
