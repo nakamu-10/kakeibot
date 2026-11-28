@@ -19,7 +19,7 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
     if (url.pathname === '/authorize' && req.method === 'GET') {
       const request = await oauth.parseAuthRequest(req);
       // 知らない戻り先には、許可の画面も出さない（エラーもそこへは返さない）
-      if (!allowedRedirect(request.redirectUri)) {
+      if (!allowedRedirect(request.redirectUri, env.EXTRA_REDIRECT_URIS)) {
         return page(
           'この AI アプリにはつなげません',
           '<p>家計簿につなげる AI アプリは決めています（Claude・Gemini・Muse）。自分でつなごうとしたのでなければ、この画面を閉じてください。</p>',
@@ -56,6 +56,10 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
       if (url.searchParams.get('error') || !code) {
         headers.set('Location', authorizationErrorRedirect(request, 'access_denied'));
         return new Response(null, { status: 302, headers });
+      }
+      // 許可の画面を出す前にも確かめているが、トークンを出す直前にもう一度確かめる
+      if (!allowedRedirect(request.redirectUri, env.EXTRA_REDIRECT_URIS)) {
+        return page('この AI アプリにはつなげません', '<p>家計簿につなげる AI アプリは決めています。</p>', 400);
       }
       const userId = await lineUserId(env, code, data.verifier);
       if (!isOwner(env.OWNER_LINE_USER_ID, userId)) {

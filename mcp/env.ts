@@ -11,6 +11,8 @@ export interface McpEnv {
   LOGIN_CHANNEL_SECRET: string;
   /** AI とつなげる家計簿の持ち主の LINE userId（シークレット。公開リポジトリに書かない）。なければだれもつなげない */
   OWNER_LINE_USER_ID?: string;
+  /** 決まった戻り先（Claude・Muse）のほかに許す戻り先（シークレット、カンマ区切り）。持ち主の Gemini の戻り先など */
+  EXTRA_REDIRECT_URIS?: string;
   /** シフト収入のカレンダーを読むため（ボットと同じ鍵） */
   ICAL_ENCRYPTION_KEY: string;
   /** OAuthProvider が入れる */

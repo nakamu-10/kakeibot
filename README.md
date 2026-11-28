@@ -143,16 +143,18 @@ Claude などの AI アプリに家計簿をつなぐと、チャットで「今
    ```powershell
    npx wrangler secret put LOGIN_CHANNEL_SECRET -c mcp/wrangler.toml   # LINE ログインチャネルの「チャネルシークレット」
    npx wrangler secret put ICAL_ENCRYPTION_KEY -c mcp/wrangler.toml    # ボットと同じ値
-   npx wrangler secret put OWNER_LINE_USER_ID -c mcp/wrangler.toml     # 自分の LINE userId（LINE Developers の Messaging API チャネル →「チャネル基本設定」→「あなたのユーザーID」）
+   npx wrangler secret put OWNER_LINE_USER_ID -c mcp/wrangler.toml     # 自分の LINE userId（LINE Developers の LINE ログインチャネル →「チャネル基本設定」→「あなたのユーザーID」）
+   npx wrangler secret put EXTRA_REDIRECT_URIS -c mcp/wrangler.toml    # Gemini でつなぐなら、自分の Gemini の戻り先（下の「AI アプリに登録する」）
    npm run deploy:mcp
    ```
 
-AI とつなげるのは、`OWNER_LINE_USER_ID` の LINE アカウントの家計簿だけです（ほかの人がログインしても断る）。ログインのあとに戻ってよい AI アプリも、Claude・Gemini・Muse に限っています（`mcp/access.ts`）。ほかの AI アプリをつなぐときは、その戻り先をここに足してデプロイし直します（ADR 0016）。許可の画面の「書き込み」は、初めはオフです。
+AI とつなげるのは、`OWNER_LINE_USER_ID` の LINE アカウントの家計簿だけです（ほかの人がログインしても断る）。ログインのあとに戻ってよい先も、URL 全体で決めています。Claude と Muse の戻り先は `mcp/access.ts` に書いてあり、Gemini の戻り先は Google アカウントごとに違うので、シークレット `EXTRA_REDIRECT_URIS` に入れます。ほかの AI アプリをつなぐときは、その戻り先を足します（ADR 0016）。許可の画面の「書き込み」は、初めはオフです。
 
 ### AI アプリに登録する
 
 - Claude：「設定」→「コネクタ」→「カスタムコネクタを追加」に `https://kakeibot-mcp.<サブドメイン>.workers.dev/mcp` を入れる。つなぐと許可の画面と LINE ログインが出る
 - Gemini・Muse：設定のカスタムアプリ・コネクタの追加に、同じ URL を入れる（地域やアカウントによっては、その項目がないことがある）
+- Gemini の戻り先は `https://oauth-redirect.googleusercontent.com/r/...` の形で、アカウントごとに違う。はじめてつなぐときは許可の画面が出ずに断られるので、`npx wrangler tail -c mcp/wrangler.toml` で `/authorize` の `redirect_uri` を読み、`EXTRA_REDIRECT_URIS` に入れる
 
 ### できること
 

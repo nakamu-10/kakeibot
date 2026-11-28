@@ -27,3 +27,4 @@ LOGIN_CHANNEL_ID = "2012810933"
 # npx wrangler secret put LOGIN_CHANNEL_SECRET -c mcp/wrangler.toml   (LINE ログインチャネルのチャネルシークレット)
 # npx wrangler secret put ICAL_ENCRYPTION_KEY -c mcp/wrangler.toml    (ボットと同じ値。シフト収入を読むため)
 # npx wrangler secret put OWNER_LINE_USER_ID -c mcp/wrangler.toml     (AI とつなげる家計簿の持ち主の LINE userId。ないとだれもつなげない)
+# npx wrangler secret put EXTRA_REDIRECT_URIS -c mcp/wrangler.toml    (持ち主の Gemini の戻り先など、個人の ID を含む戻り先。カンマ区切り)

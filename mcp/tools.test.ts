@@ -15,8 +15,12 @@ function registeredTools() {
     tools.push({ name, readOnly: config.annotations?.readOnlyHint === true });
     return {} as never;
   });
-  createServer({} as McpEnv, 'U');
-  spy.mockRestore();
+  try {
+    createServer({} as McpEnv, 'U');
+  } finally {
+    // 失敗しても、ほかのテストに差し替えたままの registerTool を残さない
+    spy.mockRestore();
+  }
   return tools;
 }
 
