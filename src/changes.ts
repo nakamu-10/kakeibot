@@ -71,7 +71,7 @@ export function fixedCostChange(op: ChangeOp, before: FixedCost | null, after: F
 
 export function goalChange(op: ChangeOp, before: Goal | null, after: Goal | null): Change {
   const show = (g: Goal) =>
-    `${g.name} ${yen(g.saved)}/${yen(g.target)}${g.deadline ? `（${g.deadline.slice(0, 4)}年${Number(g.deadline.slice(5, 7))}月まで）` : ''}`;
+    `${g.name} ${g.accountIds.length ? `口座${g.accountIds.length}つから` : yen(g.saved)}/${yen(g.target)}${g.deadline ? `（${g.deadline.slice(0, 4)}年${Number(g.deadline.slice(5, 7))}月まで）` : ''}`;
   const summary =
     op === 'insert' && after
       ? `目標を追加：${show(after)}`

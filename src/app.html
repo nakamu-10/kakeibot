@@ -1074,7 +1074,11 @@
         $('gs-title').textContent = g ? '目標を直す' : '目標を追加';
         $('gs-name').value = g ? g.name : '';
         $('gs-target').value = g ? g.target : '';
-        $('gs-saved').value = g ? g.saved || '' : '';
+        // 口座をつないだ目標は、残高の合計を使うので手では入れない
+        const linked = !!g && g.accountIds.length > 0;
+        $('gs-saved').value = g && !linked ? g.saved || '' : '';
+        $('gs-saved').disabled = linked;
+        $('gs-saved').placeholder = linked ? `口座の残高から（今 ${yen(g.saved)}）` : '0';
         $('gs-deadline').value = g ? g.deadline : '';
         $('gs-delete').style.display = g ? '' : 'none';
         $('gs-delete').textContent = '削除';
@@ -1097,6 +1101,7 @@
             name,
             target,
             saved: Number($('gs-saved').value) || 0,
+            accountIds: editingGoal?.accountIds ?? [],
             deadline: $('gs-deadline').value,
             memo: editingGoal?.memo ?? '',
           }),

@@ -403,7 +403,7 @@ export class Repo {
   async goals(userId: string): Promise<Goal[]> {
     const r = await this.db
       .prepare(
-        "SELECT id, name, target, saved, deadline, memo FROM goals WHERE user_id = ? ORDER BY deadline = '', deadline, id",
+        "SELECT id, name, target, saved, account_ids, deadline, memo FROM goals WHERE user_id = ? ORDER BY deadline = '', deadline, id",
       )
       .bind(userId)
       .all();
@@ -416,11 +416,11 @@ export class Repo {
 
   /** id が 0 なら足し、そうでなければ上書きする。保存したものを返す */
   async saveGoal(userId: string, g: Goal): Promise<Goal> {
-    const fields = [g.name, g.target, g.saved, g.deadline, g.memo];
+    const fields = [g.name, g.target, g.saved, JSON.stringify(g.accountIds), g.deadline, g.memo];
     if (g.id > 0) {
       await this.db
         .prepare(
-          'UPDATE goals SET name = ?, target = ?, saved = ?, deadline = ?, memo = ? WHERE id = ? AND user_id = ?',
+          'UPDATE goals SET name = ?, target = ?, saved = ?, account_ids = ?, deadline = ?, memo = ? WHERE id = ? AND user_id = ?',
         )
         .bind(...fields, g.id, userId)
         .run();
@@ -428,7 +428,7 @@ export class Repo {
     }
     const r = await this.db
       .prepare(
-        'INSERT INTO goals (name, target, saved, deadline, memo, user_id) VALUES (?, ?, ?, ?, ?, ?) RETURNING id',
+        'INSERT INTO goals (name, target, saved, account_ids, deadline, memo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id',
       )
       .bind(...fields, userId)
       .first<{ id: number }>();
@@ -443,8 +443,10 @@ export class Repo {
   /** 消した目標を、同じ id で戻す（取り消し用） */
   async restoreGoal(userId: string, g: Goal): Promise<void> {
     await this.db
-      .prepare('INSERT INTO goals (id, user_id, name, target, saved, deadline, memo) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(g.id, userId, g.name, g.target, g.saved, g.deadline, g.memo)
+      .prepare(
+        'INSERT INTO goals (id, user_id, name, target, saved, account_ids, deadline, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(g.id, userId, g.name, g.target, g.saved, JSON.stringify(g.accountIds), g.deadline, g.memo)
       .run();
   }
 

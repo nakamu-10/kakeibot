@@ -81,6 +81,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0009_fixed_costs.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0010_fixed_auto_record.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0011_goals.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0012_assets.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0013_goal_accounts.sql
 npm run deploy
 ```
 
@@ -171,7 +172,7 @@ LINE ログインチャネルが「開発中」の間は、チャネルの管理
 | `save_fixed_cost`         | 固定費・サブスクを登録・変更する。「自動で記録する」にしたものは、払う日の朝に家計簿へ記録される（手では記録しない）。書き込みの許可が要る |
 | `delete_fixed_cost`       | 固定費を消す。書き込みの許可が要る                                                                                                         |
 | `list_goals`              | 貯金の目標と見通し（期限までの毎月の額、今のペースで届く月）                                                                               |
-| `save_goal`               | 目標を登録・変更する（今貯まっている額の更新にも使う）。書き込みの許可が要る                                                               |
+| `save_goal`               | 目標を登録・変更する（今貯まっている額の更新にも使う。口座をつなぐと、その残高の合計を使う）。書き込みの許可が要る                         |
 | `delete_goal`             | 目標を消す。書き込みの許可が要る                                                                                                           |
 | `get_assets`              | 口座ごとの残高、資産・借金・純資産、資産の分け方、月ごとの推移（積み立てた分と値動き）                                                     |
 | `save_account`            | 口座（預金・NISA・iDeCo・証券・暗号資産・借金など）を登録・変更する。書き込みの許可が要る                                                  |

@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS goals (
   target     INTEGER NOT NULL,                  -- 目標の額
   saved      INTEGER NOT NULL DEFAULT 0,        -- 今貯まっている額（ユーザーか AI が入れる）
   deadline   TEXT NOT NULL DEFAULT '',          -- 'YYYY-MM'。なければ ''
+  account_ids TEXT NOT NULL DEFAULT '[]',       -- つないだ口座（accounts.id の JSON 配列）。あれば saved の代わりに残高の合計を使う
   memo       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
