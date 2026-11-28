@@ -6,6 +6,7 @@ import appHtml from './app.html';
 import shiftHtml from './shift.html';
 import uiCss from './ui.css';
 import { runPaydays } from './shift/payday';
+import { runFixedCosts } from './fixedDaily';
 import { runReminders } from './remind';
 
 export default {
@@ -62,7 +63,10 @@ export default {
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
     const now = new Date(controller.scheduledTime);
     // 毎朝8時（日本時間）：給料日・仕送りの日の記録と通知
-    if (controller.cron === '0 23 * * *') ctx.waitUntil(runPaydays(env, now));
+    if (controller.cron === '0 23 * * *') {
+      ctx.waitUntil(runPaydays(env, now));
+      ctx.waitUntil(runFixedCosts(env, now));
+    }
     // 毎晩21時（日本時間）：記録忘れ通知
     if (controller.cron === '0 12 * * *') ctx.waitUntil(runReminders(env, now));
   },
