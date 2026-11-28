@@ -120,3 +120,23 @@ export function assetSummary(accounts: Account[], balances: Balance[], thisMonth
     history: history.filter((h, i) => h.netWorth !== 0 || history.slice(0, i).some((x) => x.netWorth !== 0)),
   };
 }
+
+/**
+ * 月の残高を入れる欄の中身。口座ごとに、その月にもう入れた値と、
+ * その月より前でいちばん新しい残高（目安）を返す。入れた額は、まだなければ前の月と同じにする
+ */
+export function balanceForm(accounts: Account[], balances: Balance[], month: string) {
+  return accounts
+    .filter((a) => a.active)
+    .map((a) => {
+      const current = balances.find((b) => b.accountId === a.id && b.month === month);
+      const last = balanceAt(balances, a.id, shiftMonth(month, -1));
+      return {
+        accountId: a.id,
+        balance: current?.balance ?? null,
+        contribution: isInvestment(a.kind) ? (current?.contribution ?? last?.contribution ?? 0) : null,
+        lastBalance: last?.balance ?? null,
+        lastMonth: last?.month ?? '',
+      };
+    });
+}
