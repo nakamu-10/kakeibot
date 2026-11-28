@@ -80,6 +80,7 @@ npx wrangler d1 execute kakeibo --remote --file=migrations/0008_changes.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0009_fixed_costs.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0010_fixed_auto_record.sql
 npx wrangler d1 execute kakeibo --remote --file=migrations/0011_goals.sql
+npx wrangler d1 execute kakeibo --remote --file=migrations/0012_assets.sql
 npm run deploy
 ```
 
@@ -172,10 +173,13 @@ LINE ログインチャネルが「開発中」の間は、チャネルの管理
 | `list_goals`              | 貯金の目標と見通し（期限までの毎月の額、今のペースで届く月）                                                                               |
 | `save_goal`               | 目標を登録・変更する（今貯まっている額の更新にも使う）。書き込みの許可が要る                                                               |
 | `delete_goal`             | 目標を消す。書き込みの許可が要る                                                                                                           |
+| `get_assets`              | 口座ごとの残高、資産・借金・純資産、資産の分け方、月ごとの推移（積み立てた分と値動き）                                                     |
+| `save_account`            | 口座（預金・NISA・iDeCo・証券・暗号資産・借金など）を登録・変更する。書き込みの許可が要る                                                  |
+| `record_balances`         | 口座ごとの月の残高と、投資の口座で入れた額を入れる。書き込みの許可が要る                                                                   |
 | `list_changes`            | AI が加えた変更の履歴（1回の依頼ごと）                                                                                                     |
 | `undo_changes`            | AI が加えた変更を、1回の依頼ごとに元に戻す。その後に自分で直した記録は戻さない。書き込みの許可が要る                                       |
 
-つなぐときの許可の画面で「家計簿に記録する・直す・消す、予算・固定費・目標を変える」を外すと、見るだけになります。カテゴリとシフト収入の設定は、AI からは変えられません。AI が加えた変更は、家計簿の画面の「設定」→「AI による変更」からも元に戻せます。
+つなぐときの許可の画面で「家計簿に記録する・直す・消す、予算・固定費・目標・口座と残高を変える」を外すと、見るだけになります。カテゴリとシフト収入の設定は、AI からは変えられません。AI が加えた変更は、家計簿の画面の「設定」→「AI による変更」からも元に戻せます。
 
 ### 届いた要望を見る（持ち主）
 
