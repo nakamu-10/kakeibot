@@ -1,4 +1,5 @@
 import type { Repo } from './db';
+import { sameFixedCost, type FixedCost } from './fixed';
 import type { Entry } from './types';
 import { yen } from './util';
 
@@ -7,7 +8,7 @@ import { yen } from './util';
  * 1回の依頼（ツールの1回の呼び出し）で変えたものを、同じ batch にまとめて残す
  */
 
-export type ChangeTarget = 'entry' | 'budget';
+export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost';
 export type ChangeOp = 'insert' | 'update' | 'delete';
 
 export interface Change {
@@ -52,6 +53,20 @@ export function budgetChange(before: number, after: number): Change {
   };
 }
 
+export function fixedCostChange(op: ChangeOp, before: FixedCost | null, after: FixedCost | null): Change {
+  const show = (f: FixedCost) =>
+    `${f.name} ${yen(f.amount)}/${f.cycle === 'yearly' ? '年' : '月'}${f.active ? '' : '（やめた）'}`;
+  const summary =
+    op === 'insert' && after
+      ? `固定費を追加：${show(after)}`
+      : op === 'delete' && before
+        ? `固定費を削除：${show(before)}`
+        : before && after
+          ? `固定費を変更：${show(before)} → ${show(after)}`
+          : '';
+  return { target: 'fixed_cost', targetId: (after ?? before)?.id ?? 0, op, before, after, summary };
+}
+
 /** 記録が、変えたあとのまま（その後に誰も直していない）か */
 export function sameEntry(current: EntryFields, expected: EntryFields): boolean {
   return (
@@ -87,6 +102,19 @@ export async function undoBatch(
         continue;
       }
       await repo.setBudget(userId, before);
+      undone.push(c.summary);
+      continue;
+    }
+    if (c.target === 'fixed_cost') {
+      const current = await repo.getFixedCost(userId, c.targetId);
+      const ok = c.op === 'delete' ? !current : current !== null && sameFixedCost(current, c.after as FixedCost);
+      if (!ok) {
+        skipped.push(`${c.summary}（その後に変わったので戻していません）`);
+        continue;
+      }
+      if (c.op === 'insert') await repo.deleteFixedCost(userId, c.targetId);
+      else if (c.op === 'delete') await repo.restoreFixedCost(userId, c.before as FixedCost);
+      else await repo.saveFixedCost(userId, c.before as FixedCost);
       undone.push(c.summary);
       continue;
     }

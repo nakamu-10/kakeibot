@@ -1,5 +1,6 @@
 import type { Change, ChangeOp, ChangeTarget, StoredChange } from './changes';
 import type { Category, Entry, EntryType } from './types';
+import { sanitizeFixedCost, type FixedCost } from './fixed';
 import { DEFAULT_CATEGORIES } from './parse';
 import { sanitizeJob, type Allowance, type Job } from './shift/calc';
 import { daysInMonth, shiftMonth } from './util';
@@ -273,6 +274,71 @@ export class Repo {
       )
       .bind(userId, from)
       .all<{ date: string; category: string; memo: string; source: string; edit_count: number; created_at: string }>();
+    return r.results;
+  }
+
+  // ---------- 固定費 ----------
+  async fixedCosts(userId: string): Promise<FixedCost[]> {
+    const r = await this.db
+      .prepare(
+        'SELECT id, name, amount, category, cycle, day, month, active, memo FROM fixed_costs WHERE user_id = ? ORDER BY active DESC, amount DESC, id',
+      )
+      .bind(userId)
+      .all();
+    return r.results.map((row) => sanitizeFixedCost({ ...row, active: row.active === 1 }));
+  }
+
+  async getFixedCost(userId: string, id: number): Promise<FixedCost | null> {
+    return (await this.fixedCosts(userId)).find((f) => f.id === id) ?? null;
+  }
+
+  /** id が 0 なら足し、そうでなければ上書きする。保存したものを返す */
+  async saveFixedCost(userId: string, f: FixedCost): Promise<FixedCost> {
+    const fields = [f.name, f.amount, f.category, f.cycle, f.day, f.month, f.active ? 1 : 0, f.memo];
+    if (f.id > 0) {
+      await this.db
+        .prepare(
+          'UPDATE fixed_costs SET name = ?, amount = ?, category = ?, cycle = ?, day = ?, month = ?, active = ?, memo = ? WHERE id = ? AND user_id = ?',
+        )
+        .bind(...fields, f.id, userId)
+        .run();
+      return f;
+    }
+    const r = await this.db
+      .prepare(
+        'INSERT INTO fixed_costs (name, amount, category, cycle, day, month, active, memo, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
+      )
+      .bind(...fields, userId)
+      .first<{ id: number }>();
+    if (!r) throw new Error('insert failed');
+    return { ...f, id: r.id };
+  }
+
+  async deleteFixedCost(userId: string, id: number): Promise<void> {
+    await this.db.prepare('DELETE FROM fixed_costs WHERE id = ? AND user_id = ?').bind(id, userId).run();
+  }
+
+  /** 消した固定費を、同じ id で戻す（取り消し用） */
+  async restoreFixedCost(userId: string, f: FixedCost): Promise<void> {
+    await this.db
+      .prepare(
+        'INSERT INTO fixed_costs (id, user_id, name, amount, category, cycle, day, month, active, memo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      )
+      .bind(f.id, userId, f.name, f.amount, f.category, f.cycle, f.day, f.month, f.active ? 1 : 0, f.memo)
+      .run();
+  }
+
+  /** 固定費の候補を探すため、期間の支出を読む */
+  async expensesSince(
+    userId: string,
+    from: string,
+  ): Promise<{ date: string; category: string; amount: number; memo: string; store: string }[]> {
+    const r = await this.db
+      .prepare(
+        "SELECT date, category, amount, memo, store FROM entries WHERE user_id = ? AND type = 'expense' AND date >= ?",
+      )
+      .bind(userId, from)
+      .all<{ date: string; category: string; amount: number; memo: string; store: string }>();
     return r.results;
   }
 
