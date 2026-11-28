@@ -1,7 +1,8 @@
 import type { Env, EntryType } from './types';
 import { Repo } from './db';
 import { verifyIdToken } from './line';
-import { json, monthOf, todayJST } from './util';
+import { json, monthOf, shiftMonth, todayJST } from './util';
+import { findRecurring, monthlyTotal, sanitizeFixedCost } from './fixed';
 import { undoBatch } from './changes';
 import { groupByParent, orderCategories, parentError, parentName } from './category';
 import { handleShiftApi } from './shift/api';
@@ -25,13 +26,14 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind, changes] = await Promise.all([
+    const [summary, trend, budget, categories, remind, changes, fixed] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
       repo.budget(userId),
       repo.categories(userId),
       repo.remind(userId),
       repo.changeBatches(userId, 10),
+      repo.fixedCosts(userId),
     ]);
     return json({
       ...summary,
@@ -42,6 +44,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       categories: orderCategories(categories),
       remind,
       changes,
+      fixedCosts: { items: fixed, monthlyTotal: monthlyTotal(fixed) },
       today: todayJST(),
     });
   }
@@ -51,6 +54,25 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const amount = Math.max(0, Math.round(Number(body.amount) || 0));
     await repo.setBudget(userId, amount);
     return json({ ok: true, budget: amount });
+  }
+
+  // 固定費・サブスク（画面からの変更は人が見ているので、変更の履歴には残さない。ADR 0012）
+  if (method === 'GET' && path === '/fixed/candidates') {
+    const from = `${shiftMonth(monthOf(todayJST()), -5)}-01`;
+    const [entries, registered] = await Promise.all([repo.expensesSince(userId, from), repo.fixedCosts(userId)]);
+    return json(findRecurring(entries, registered));
+  }
+  if (method === 'POST' && path === '/fixed') {
+    const f = sanitizeFixedCost(body);
+    if (!f.amount) return json({ error: '金額を入れてください' }, 400);
+    if (f.id && !(await repo.getFixedCost(userId, f.id)))
+      return json({ error: 'その固定費は見つかりませんでした' }, 404);
+    return json(await repo.saveFixedCost(userId, f));
+  }
+  const fixedMatch = path.match(/^\/fixed\/(\d+)$/);
+  if (method === 'DELETE' && fixedMatch) {
+    await repo.deleteFixedCost(userId, Number(fixedMatch[1]));
+    return json({ ok: true });
   }
 
   // AI による変更の取り消し

@@ -145,6 +145,42 @@
         font-weight: 700;
       }
 
+      /* ---------- 固定費 ---------- */
+      .fixed-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        min-height: 56px;
+        padding: 6px 0;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: none;
+        text-align: left;
+        font-size: 16px;
+      }
+      .fixed-item:last-child {
+        border-bottom: none;
+      }
+      .fixed-item small {
+        display: block;
+        font-size: 13px;
+        color: var(--sub);
+      }
+      .fixed-item.stopped {
+        color: var(--sub);
+      }
+      .fixed-item .amount {
+        white-space: nowrap;
+      }
+      #fixed-candidates h4 {
+        margin: 16px 0 0;
+        font-size: 14px;
+        color: var(--sub);
+        font-weight: 600;
+      }
+
       /* ---------- AI による変更 ---------- */
       .change {
         padding: 10px 0;
@@ -352,6 +388,13 @@
           <p class="muted" style="margin: 8px 0 0">空にすると予算を出しません。</p>
         </section>
         <section class="card">
+          <h2>固定費・サブスク</h2>
+          <p class="muted" id="fixed-total" style="margin: 0 0 4px"></p>
+          <div id="fixed-list"></div>
+          <div id="fixed-candidates"></div>
+          <button class="btn soft wide" id="fixed-new" style="margin-top: 8px">固定費を追加</button>
+        </section>
+        <section class="card">
           <label class="switch">
             <span>記録していない日は、夜9時に LINE で知らせる</span>
             <input id="remind" type="checkbox" />
@@ -419,6 +462,52 @@
         <div class="actions" id="es-actions">
           <button type="button" class="btn danger" id="es-delete">削除</button>
           <button type="submit" class="btn" value="save">保存</button>
+        </div>
+        <button type="button" class="btn text wide" data-close>閉じる</button>
+      </form>
+    </dialog>
+
+    <!-- 固定費の追加・編集 -->
+    <dialog class="sheet" id="fixed-sheet">
+      <form method="dialog" id="fixed-form">
+        <div class="grabber"></div>
+        <h3 id="fs-title">固定費を追加</h3>
+        <label class="field"
+          ><span>名前</span><input id="fs-name" maxlength="30" placeholder="家賃、Netflix など"
+        /></label>
+        <div class="amount-field">
+          <span>¥</span>
+          <input id="fs-amount" type="number" inputmode="numeric" placeholder="0" aria-label="1回に払う額" />
+        </div>
+        <div class="segment" id="fs-cycle">
+          <button type="button" data-cycle="monthly" class="on">毎月</button>
+          <button type="button" data-cycle="yearly">毎年</button>
+        </div>
+        <div class="inline">
+          <label class="field" id="fs-month-field" style="flex: 1"
+            ><span>払う月</span
+            ><select id="fs-month"></select
+          ></label>
+          <label class="field" style="flex: 1"
+            ><span>払う日</span
+            ><select id="fs-day"></select
+          ></label>
+        </div>
+        <label class="field"
+          ><span>カテゴリ</span
+          ><select id="fs-category"></select
+        ></label>
+        <label class="switch">
+          <span>払う日の朝に、家計簿へ記録する（手では記録しない）</span>
+          <input id="fs-auto" type="checkbox" />
+        </label>
+        <label class="switch" id="fs-stopped-row">
+          <span>やめた（記録せず、合計にも入れない）</span>
+          <input id="fs-stopped" type="checkbox" />
+        </label>
+        <div class="actions" id="fs-actions">
+          <button type="button" class="btn danger" id="fs-delete">削除</button>
+          <button type="submit" class="btn">保存</button>
         </div>
         <button type="button" class="btn text wide" data-close>閉じる</button>
       </form>
@@ -615,6 +704,7 @@
 
       function renderSettings() {
         renderChanges();
+        renderFixed();
         $('budget-input').value = data.budget || '';
         $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
@@ -757,6 +847,129 @@
         await api('/entries/' + editing.id, { method: 'DELETE' });
         $('entry-sheet').close();
         toast('削除しました');
+        await load();
+      };
+
+      // ---------- 固定費 ----------
+      let editingFixed = null;
+      let fixedCycle = 'monthly';
+      let candidates = null;
+
+      const fixedWhen = (f) =>
+        (f.cycle === 'yearly' ? `毎年${f.month}月` : '毎月') + (f.day === 31 ? '末' : `${f.day}日`);
+
+      function renderFixed() {
+        const { items, monthlyTotal } = data.fixedCosts;
+        $('fixed-total').textContent = items.length
+          ? `毎月 ${yen(monthlyTotal)}（年払いは12で割った額）`
+          : '家賃・スマホ・サブスクのように、決まって出ていくお金を登録します。';
+        $('fixed-list').innerHTML = items
+          .map(
+            (f) => `<button class="fixed-item ${f.active ? '' : 'stopped'}" onclick="openFixed(${f.id})">
+          <span>${esc(f.name)}<small>${f.active ? `${fixedWhen(f)}・${esc(f.category)}${f.autoRecord ? '・自動で記録' : ''}` : 'やめた'}</small></span>
+          <span class="amount num">${yen(f.amount)}/${f.cycle === 'yearly' ? '年' : '月'}</span></button>`,
+          )
+          .join('');
+        if (candidates === null) {
+          candidates = [];
+          api('/fixed/candidates').then((list) => ((candidates = list), renderFixed()));
+        }
+        $('fixed-candidates').innerHTML = candidates.length
+          ? '<h4>記録によく出てくる支払い（押すと登録）</h4>' +
+            candidates
+              .map(
+                (c, i) => `<button class="fixed-item" onclick="addCandidate(${i})">
+          <span>${esc(c.name)}<small>${esc(c.category)}・${c.months}か月</small></span>
+          <span class="amount num">＋ ${yen(c.amount)}</span></button>`,
+              )
+              .join('')
+          : '';
+      }
+
+      function selectFixedCycle(cycle) {
+        fixedCycle = cycle;
+        for (const b of $('fs-cycle').children) b.classList.toggle('on', b.dataset.cycle === cycle);
+        $('fs-month-field').style.display = cycle === 'yearly' ? '' : 'none';
+      }
+
+      function openFixedSheet(f, isNew) {
+        editingFixed = isNew ? null : f;
+        $('fs-title').textContent = isNew ? '固定費を追加' : '固定費を直す';
+        $('fs-name').value = f.name || '';
+        $('fs-amount').value = f.amount || '';
+        $('fs-month').innerHTML = Array.from(
+          { length: 12 },
+          (_, i) => `<option value="${i + 1}">${i + 1}月</option>`,
+        ).join('');
+        $('fs-month').value = String(f.month || Number(data.today.slice(5, 7)));
+        $('fs-day').innerHTML =
+          Array.from({ length: 30 }, (_, i) => `<option value="${i + 1}">${i + 1}日</option>`).join('') +
+          '<option value="31">月末</option>';
+        $('fs-day').value = String(f.day || 1);
+        $('fs-category').innerHTML = data.categories
+          .filter((c) => c.type === 'expense')
+          .map((c) => `<option value="${esc(c.name)}">${c.parentId ? '　' : ''}${esc(c.name)}</option>`)
+          .join('');
+        $('fs-category').value = f.category || 'その他';
+        selectFixedCycle(f.cycle || 'monthly');
+        $('fs-auto').checked = f.autoRecord !== false;
+        $('fs-stopped').checked = f.active === false;
+        $('fs-stopped-row').style.display = isNew ? 'none' : '';
+        $('fs-delete').style.display = isNew ? 'none' : '';
+        $('fs-delete').textContent = '削除';
+        $('fs-actions').classList.toggle('two', !isNew);
+        $('fixed-sheet').showModal();
+      }
+      window.openFixed = (id) =>
+        openFixedSheet(
+          data.fixedCosts.items.find((x) => x.id === id),
+          false,
+        );
+      window.addCandidate = (i) => {
+        const c = candidates[i];
+        openFixedSheet(
+          { name: c.name, amount: c.amount, category: c.category, day: Number(c.lastDate.slice(8, 10)) },
+          true,
+        );
+      };
+      $('fixed-new').onclick = () => openFixedSheet({}, true);
+      $('fs-cycle').onclick = (ev) => ev.target.dataset.cycle && selectFixedCycle(ev.target.dataset.cycle);
+
+      $('fixed-form').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const name = $('fs-name').value.trim();
+        const amount = Number($('fs-amount').value);
+        if (!name) return toast('名前を入れてください');
+        if (!(amount > 0)) return toast('金額を入れてください');
+        await api('/fixed', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: editingFixed?.id ?? 0,
+            name,
+            amount,
+            category: $('fs-category').value,
+            cycle: fixedCycle,
+            month: Number($('fs-month').value),
+            day: Number($('fs-day').value),
+            autoRecord: $('fs-auto').checked,
+            active: !$('fs-stopped').checked,
+            memo: editingFixed?.memo ?? '',
+          }),
+        });
+        $('fixed-sheet').close();
+        toast(editingFixed ? '直しました' : `「${name}」を登録しました`);
+        candidates = null;
+        await load();
+      };
+      $('fs-delete').onclick = async () => {
+        if ($('fs-delete').textContent === '削除') {
+          $('fs-delete').textContent = 'もう一度押すと削除';
+          return;
+        }
+        await api('/fixed/' + editingFixed.id, { method: 'DELETE' });
+        $('fixed-sheet').close();
+        toast('削除しました（これまでの記録は残ります）');
+        candidates = null;
         await load();
       };
 
