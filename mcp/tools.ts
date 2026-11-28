@@ -1,7 +1,24 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { groupByParent } from '../src/category';
-import { budgetChange, entryChange, fixedCostChange, goalChange, undoBatch } from '../src/changes';
+import {
+  accountChange,
+  balanceChange,
+  budgetChange,
+  entryChange,
+  fixedCostChange,
+  goalChange,
+  undoBatch,
+} from '../src/changes';
+import {
+  ACCOUNT_KINDS,
+  assetSummary,
+  isInvestment,
+  sanitizeAccount,
+  type Account,
+  type AccountKind,
+  type Balance,
+} from '../src/assets';
 import { loadGoals, sanitizeGoal } from '../src/goals';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from '../src/fixed';
 import { Repo } from '../src/db';
@@ -487,6 +504,102 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       await repo.deleteGoal(userId, id);
       await repo.recordChanges(userId, crypto.randomUUID(), [goalChange('delete', before, null)]);
       return result({ deleted: before });
+    },
+  );
+
+  // ---------- 資産と借金 ----------
+  server.registerTool(
+    'get_assets',
+    {
+      title: '資産と借金',
+      description:
+        '口座ごとの今の残高（month はその残高を入れた月。古ければ今の残高を聞いて record_balances で入れる）、資産・借金・純資産の合計、' +
+        '資産の種類ごとの割合（allocation）、月ごとの純資産と、投資の口座で入れた額（contribution）と値動き（marketGain）。' +
+        '借金の balance は返していない額。資産の分け方の見直しや推移のふりかえりに使う。銘柄や商品を勧めるのではなく、数字をもとに考え方を一緒に整理する。',
+      inputSchema: z.object({ months: z.number().int().min(1).max(36).default(12) }),
+      annotations: READ_ONLY,
+    },
+    async ({ months }) => {
+      const [accounts, balances] = await Promise.all([repo.accounts(userId), repo.balances(userId)]);
+      return result({ kinds: ACCOUNT_KINDS, ...assetSummary(accounts, balances, monthOf(todayJST()), months) });
+    },
+  );
+
+  server.registerTool(
+    'save_account',
+    {
+      title: '口座を登録・変更する',
+      description:
+        '資産や借金の口座を登録する（id を省く）か、変える（id を渡す。すべての項目を送る）。' +
+        '解約した口座は active を false にする（これまでの残高は残る。消すのは家計簿の画面から）。undo_changes で戻せる。',
+      inputSchema: z.object({
+        id: z.number().int().optional(),
+        name: z.string().min(1).max(30),
+        kind: z
+          .enum(Object.keys(ACCOUNT_KINDS) as [AccountKind, ...AccountKind[]])
+          .describe(JSON.stringify(ACCOUNT_KINDS)),
+        active: z.boolean().default(true),
+        memo: z.string().max(100).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const before = args.id ? await repo.getAccount(userId, args.id) : null;
+      if (args.id && !before) return error(`id ${args.id} の口座が見つかりません。`);
+      const saved = await repo.saveAccount(userId, sanitizeAccount({ ...args, id: args.id ?? 0 }));
+      await repo.recordChanges(userId, crypto.randomUUID(), [
+        accountChange(before ? 'update' : 'insert', before, saved),
+      ]);
+      return result({ before, after: saved });
+    },
+  );
+
+  server.registerTool(
+    'record_balances',
+    {
+      title: '月の残高を入れる',
+      description:
+        '口座ごとの、その月の残高を入れる（同じ月をもう一度入れると上書き）。借金は返していない額を正の数で。' +
+        'contribution はその月に入れた額（積立など）で、投資の口座（NISA・iDeCo・証券・暗号資産）だけ使う。省くと前の月と同じ額にする。undo_changes で戻せる。',
+      inputSchema: z.object({
+        month: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional()
+          .describe("'YYYY-MM'。省くと今月"),
+        items: z
+          .array(
+            z.object({
+              accountId: z.number().int(),
+              balance: z.number().int().min(0),
+              contribution: z.number().int().min(0).optional(),
+            }),
+          )
+          .min(1)
+          .max(30),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ month = monthOf(todayJST()), items }) => {
+      const accounts = await repo.accounts(userId);
+      const missing = items.find((i) => !accounts.some((a) => a.id === i.accountId));
+      if (missing) return error(`id ${missing.accountId} の口座が見つかりません。get_assets の id を使ってください。`);
+      const changes = [];
+      for (const item of items) {
+        const account = accounts.find((a) => a.id === item.accountId) as Account;
+        const previous = await repo.getBalance(userId, account.id, shiftMonth(month, -1));
+        const after: Balance = {
+          accountId: account.id,
+          month,
+          balance: item.balance,
+          contribution: isInvestment(account.kind) ? (item.contribution ?? previous?.contribution ?? 0) : 0,
+        };
+        const before = await repo.getBalance(userId, account.id, month);
+        await repo.setBalance(userId, after);
+        changes.push(balanceChange(account.name, before, after));
+      }
+      await repo.recordChanges(userId, crypto.randomUUID(), changes);
+      return result({ month, recorded: changes.map((c) => c.summary) });
     },
   );
 

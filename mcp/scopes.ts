@@ -4,7 +4,7 @@ export const WRITE = 'kakeibo:write';
 
 export const SCOPE_LABELS: Record<string, string> = {
   [READ]: '家計簿を見る（記録・集計・シフト収入）',
-  [WRITE]: '家計簿に記録する・直す・消す、予算・固定費・目標を変える（取り消せる）',
+  [WRITE]: '家計簿に記録する・直す・消す、予算・固定費・目標・口座と残高を変える（取り消せる）',
 };
 
 /** 書き込みの許可が要るツール */
@@ -18,6 +18,8 @@ const WRITE_TOOLS = new Set([
   'delete_fixed_cost',
   'save_goal',
   'delete_goal',
+  'save_account',
+  'record_balances',
 ]);
 
 /**

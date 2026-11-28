@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { budgetChange, entryChange, fixedCostChange, goalChange, sameEntry } from './changes';
+import {
+  accountChange,
+  balanceChange,
+  budgetChange,
+  entryChange,
+  fixedCostChange,
+  goalChange,
+  sameEntry,
+} from './changes';
+import { sanitizeAccount } from './assets';
 import { sanitizeGoal } from './goals';
 import { sanitizeFixedCost } from './fixed';
 import type { Entry } from './types';
@@ -60,6 +69,24 @@ describe('goalChange', () => {
       summary: '目標を追加：旅行 ¥60,000/¥300,000（2027年8月まで）',
     });
     expect(goalChange('delete', { ...trip, deadline: '' }, null).summary).toBe('目標を削除：旅行 ¥60,000/¥300,000');
+  });
+});
+
+describe('accountChange / balanceChange', () => {
+  it('口座と残高の要約。入れた額は投資の口座だけ', () => {
+    const nisa = sanitizeAccount({ id: 2, name: 'NISA', kind: 'nisa' });
+    expect(accountChange('update', nisa, { ...nisa, active: false }).summary).toBe(
+      '口座を変更：NISA（NISA） → NISA（NISA）・解約',
+    );
+    const after = { accountId: 2, month: '2026-11', balance: 160000, contribution: 30000 };
+    expect(balanceChange('NISA', null, after)).toMatchObject({
+      target: 'balance',
+      op: 'insert',
+      summary: 'NISAの11月の残高：¥160,000（入れた額 ¥30,000）',
+    });
+    expect(
+      balanceChange('銀行', { ...after, balance: 1, contribution: 0 }, { ...after, contribution: 0 }).summary,
+    ).toBe('銀行の11月の残高：¥1 → ¥160,000');
   });
 });
 
