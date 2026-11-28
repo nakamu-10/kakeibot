@@ -96,7 +96,8 @@ export function goalPlan(goal: Goal, thisMonth: string, surplus: number | null) 
     monthsLeft,
     perMonth,
     reachMonth,
-    onTrack: perMonth === null || surplus === null ? null : surplus >= perMonth,
+    // 届いていれば、余りがマイナスでも間に合っている
+    onTrack: remaining === 0 ? true : perMonth === null || surplus === null ? null : surplus >= perMonth,
   };
 }
 
