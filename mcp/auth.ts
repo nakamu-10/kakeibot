@@ -1,5 +1,5 @@
 import { AuthorizationError, CimdFetchError, authorizationErrorRedirect } from '@cloudflare/workers-oauth-provider';
-import { allowedRedirect, isOwner } from './access';
+import { allowedRedirect, isOwner, maskUserId } from './access';
 import { codeChallenge, consentPage, escape, page, randomVerifier } from './consent';
 import type { McpEnv } from './env';
 
@@ -56,18 +56,26 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
       const { request, data, headers } = await oauth.finishUpstream<{ verifier: string }>(req);
       // 許可の画面を出す前にも確かめているが、エラーもトークンも返す前にもう一度確かめる
       if (!allowedRedirect(request.redirectUri, env.EXTRA_REDIRECT_URIS)) {
+        console.log('callback: redirect not allowed', request.redirectUri);
         return page('この AI アプリにはつなげません', '<p>家計簿につなげる AI アプリは決めています。</p>', 400);
       }
       const code = url.searchParams.get('code');
       if (url.searchParams.get('error') || !code) {
+        console.log('callback: LINE login was not completed', url.searchParams.get('error') ?? 'no code');
         headers.set('Location', authorizationErrorRedirect(request, 'access_denied'));
         return new Response(null, { status: 302, headers });
       }
       const userId = await lineUserId(env, code, data.verifier);
+      // AI アプリに返すと「接続できない」としか出ないので、ここで理由を見せる
       if (!isOwner(env.OWNER_LINE_USER_ID, userId)) {
-        headers.set('Location', authorizationErrorRedirect(request, 'access_denied'));
-        return new Response(null, { status: 302, headers });
+        console.log('callback: not owner', maskUserId(userId), 'owner:', maskUserId(env.OWNER_LINE_USER_ID));
+        return page(
+          'この LINE アカウントでは使えません',
+          '<p>AI とつなげるのは、家計簿の持ち主の LINE アカウントだけです。ふだん家計簿ボットとトークしているアカウントでログインしてください。</p>',
+          403,
+        );
       }
+      console.log('callback: authorized', maskUserId(userId), new URL(request.redirectUri).host);
       const { redirectTo } = await oauth.completeAuthorization({
         request,
         userId,
@@ -97,6 +105,7 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
       return Response.redirect(error.redirectTo, 302);
     }
     if (error instanceof AuthorizationError || error instanceof CimdFetchError) {
+      console.log('auth error', url.pathname, error instanceof AuthorizationError ? error.code : 'cimd', error.message);
       const message =
         error instanceof AuthorizationError
           ? 'この画面は使えなくなりました。AI アプリから、もう一度つなぎ直してください。'

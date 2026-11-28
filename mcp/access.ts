@@ -31,3 +31,10 @@ export function isOwner(ownerUserId: string | undefined, userId: string): boolea
   const owner = ownerUserId?.trim();
   return !!owner && userId === owner;
 }
+
+/** ログに出す userId。だれのログインかを見分けられるだけ残し、全部は出さない */
+export function maskUserId(userId: string | undefined): string {
+  const id = userId?.trim() ?? '';
+  if (!id) return '(なし)';
+  return id.length <= 8 ? '…' : `${id.slice(0, 3)}…${id.slice(-4)}`;
+}

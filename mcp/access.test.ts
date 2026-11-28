@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allowedRedirect, isOwner } from './access';
+import { allowedRedirect, isOwner, maskUserId } from './access';
 
 const GEMINI_OWNER = 'https://oauth-redirect.googleusercontent.com/r/owner-connector-id';
 
@@ -35,5 +35,13 @@ describe('isOwner', () => {
   it('シークレットに付いた空白や改行は無視する', () => {
     expect(isOwner('Uowner\n', 'Uowner')).toBe(true);
     expect(isOwner('  ', '')).toBe(false);
+  });
+});
+
+describe('maskUserId', () => {
+  it('前の3文字と後ろの4文字だけ出す', () => {
+    expect(maskUserId('U1234567890abcdef1234567890abcdef')).toBe('U12…cdef');
+    expect(maskUserId(' Uabc\n')).toBe('…');
+    expect(maskUserId(undefined)).toBe('(なし)');
   });
 });
