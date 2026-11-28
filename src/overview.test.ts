@@ -47,6 +47,7 @@ const input: Parameters<typeof financialOverview>[0] = {
     sanitizeFixedCost({ name: 'NISA 積立', amount: 4000, category: '貯金・投資' }),
   ],
   budget: 100000,
+  categoryBudgets: [{ categoryName: '食費', amount: 40000 }],
   goals,
   assets,
 };
@@ -64,9 +65,9 @@ describe('financialOverview', () => {
       leftAfterSaving: -49000,
     });
     expect(o.spendingByCategory).toEqual([
-      { name: '住居', average: 60000, share: 0.5 },
-      { name: '食費', average: 45000, share: 0.375 },
-      { name: '趣味', average: 15000, share: 0.125 },
+      { name: '住居', average: 60000, share: 0.5, budget: null },
+      { name: '食費', average: 45000, share: 0.375, budget: 40000 },
+      { name: '趣味', average: 15000, share: 0.125, budget: null },
     ]);
   });
 

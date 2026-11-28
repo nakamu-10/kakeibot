@@ -27,6 +27,7 @@ interface OverviewInput {
   savings: Set<string>;
   fixedCosts: FixedCost[];
   budget: number;
+  categoryBudgets: { categoryName: string; amount: number }[];
   goals: Awaited<ReturnType<typeof loadGoals>>;
   assets: ReturnType<typeof assetSummary>;
 }
@@ -47,7 +48,13 @@ export function financialOverview(input: OverviewInput) {
   const spending = names
     .map((name) => {
       const average = avg((m) => m.byCategory[name] ?? 0);
-      return { name, average, share: expense ? Math.round((average / expense) * 1000) / 1000 : 0 };
+      const catBudget = input.categoryBudgets.find((b) => b.categoryName === name);
+      return {
+        name,
+        average,
+        share: expense ? Math.round((average / expense) * 1000) / 1000 : 0,
+        budget: catBudget?.amount ?? null,
+      };
     })
     .sort((a, b) => b.average - a.average);
 

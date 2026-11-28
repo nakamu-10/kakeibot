@@ -37,6 +37,7 @@ const HELP = `使い方
 コマンド
 ・今月 / 先月 … 集計を表示
 ・予算 50000 … 月の予算を設定
+・予算 食費 30000 … カテゴリ別に設定
 ・取り消し … 直前の記録を削除
 ・カテゴリ … カテゴリ一覧
 ・グラフ … グラフ・設定画面を開く
@@ -128,19 +129,62 @@ async function handleText(ctx: Ctx, raw: string): Promise<void> {
       ),
     ]);
   }
-  const b = t.match(/^予算\s*(\d+)?\s*円?$/);
-  if (b) {
-    if (b[1]) {
-      await repo.setBudget(userId, parseInt(b[1], 10));
-      return reply(env, replyToken, [text(`月の予算を ${yen(parseInt(b[1], 10))} に設定しました。`)]);
+  if (/^予算(\s|$)/.test(t)) {
+    const rest = t.replace(/^予算\s*/, '').trim();
+    // 「予算 50000」→ 全体予算
+    const numOnly = rest.match(/^(\d+)\s*円?$/);
+    if (numOnly) {
+      const amount = parseInt(numOnly[1], 10);
+      await repo.setBudget(userId, amount);
+      return reply(env, replyToken, [text(`月の予算を ${yen(amount)} に設定しました。`)]);
     }
-    const budget = await repo.budget(userId);
+    // 「予算 食費 30000」「予算 食費 なし」→ カテゴリ別予算
+    const catMatch = rest.match(/^(.+?)\s+(\d+)\s*円?$/) ?? rest.match(/^(.+?)\s+(なし)$/);
+    if (catMatch) {
+      const catName = catMatch[1];
+      const amountStr = catMatch[2];
+      const cats = await repo.categories(userId);
+      const cat = cats.find((c) => c.type === 'expense' && c.name === catName && !c.parentId && !c.saving);
+      if (!cat) {
+        const child = cats.find((c) => c.type === 'expense' && c.name === catName && c.parentId);
+        if (child) {
+          const parent = cats.find((c) => c.id === child.parentId);
+          return reply(env, replyToken, [
+            text(
+              `予算は親カテゴリ単位で設定できます。${parent ? `「予算 ${parent.name} ${amountStr}」のように送ってください。` : ''}`,
+            ),
+          ]);
+        }
+        return reply(env, replyToken, [text(`支出カテゴリ「${catName}」が見つかりません。`)]);
+      }
+      if (amountStr === 'なし' || amountStr === '0') {
+        await repo.deleteCategoryBudget(userId, catName);
+        return reply(env, replyToken, [text(`${catName}の予算を解除しました。`)]);
+      }
+      const amount = parseInt(amountStr, 10);
+      await repo.setCategoryBudget(userId, catName, amount);
+      return reply(env, replyToken, [text(`${catName}の月予算を ${yen(amount)} に設定しました。`)]);
+    }
+    // 「予算」→ 全体 + カテゴリ別を表示
+    if (!rest) {
+      const [budget, catBudgets] = await Promise.all([repo.budget(userId), repo.categoryBudgets(userId)]);
+      const lines: string[] = [];
+      if (budget) {
+        lines.push(`月予算 ${yen(budget)}`);
+      } else {
+        lines.push('月予算は未設定です。');
+      }
+      if (catBudgets.length) {
+        lines.push('', 'カテゴリ別:');
+        for (const cb of catBudgets) {
+          lines.push(`・${cb.categoryName} ${yen(cb.amount)}`);
+        }
+      }
+      lines.push('', '変更は「予算 50000」（全体）か「予算 食費 30000」（カテゴリ別）のように送ってください。');
+      return reply(env, replyToken, [text(lines.join('\n'))]);
+    }
     return reply(env, replyToken, [
-      text(
-        budget
-          ? `今の月予算は ${yen(budget)} です。\n変更は「予算 50000」のように送ってください。`
-          : '予算は未設定です。「予算 50000」のように送ってください。',
-      ),
+      text('「予算 50000」（全体）か「予算 食費 30000」（カテゴリ別）のように送ってください。'),
     ]);
   }
 
@@ -301,10 +345,11 @@ const MAX_CHILD_BUTTONS = 8;
 async function replyRecorded(ctx: Ctx, e: Entry, title = '記録しました ✓', { askChild = true } = {}): Promise<void> {
   const { env, repo, userId, replyToken } = ctx;
   const month = monthOf(e.date);
-  const [s, budget, cats] = await Promise.all([
+  const [s, budget, cats, catBudgets] = await Promise.all([
     repo.monthSummary(userId, month),
     repo.budget(userId),
     repo.categories(userId),
+    repo.categoryBudgets(userId),
   ]);
   const label = month === monthOf(todayJST()) ? '今月' : `${Number(month.slice(5))}月`;
   // 「日用品 500」のように子を持つ親に記録したら、子を選べるようにする（選ばなければ親のまま）
@@ -321,8 +366,13 @@ async function replyRecorded(ctx: Ctx, e: Entry, title = '記録しました ✓
     lines.push('', `${label}の${e.category} ${yen(s.byCategory[e.category] ?? 0)}`);
     const groupName = parentName(cats, e.category) ?? e.category;
     const group = groupByParent(s.byCategory, cats).find((g) => g.name === groupName);
+    const catBudget = catBudgets.find((cb) => cb.categoryName === groupName);
     // 子カテゴリの記録か、子を持つ親への記録なら、親の合計も出す
     if (group?.children.length) lines.push(`${label}の${groupName}（合計） ${yen(group.total)}`);
+    if (catBudget) {
+      const groupSpent = group?.total ?? 0;
+      lines.push(`${groupName}の予算 ${yen(groupSpent)} / ${yen(catBudget.amount)}`);
+    }
     lines.push(`${label}の支出 ${yen(s.expense)}`);
     if (budget) lines.push(`予算残り ${yen(budget - s.expense)}`);
   } else {
@@ -343,8 +393,12 @@ async function replyRecorded(ctx: Ctx, e: Entry, title = '記録しました ✓
 
 async function replySummary(ctx: Ctx, month: string): Promise<void> {
   const { env, repo, userId, replyToken } = ctx;
-  const s = await repo.monthSummary(userId, month);
-  const budget = await repo.budget(userId);
+  const [s, budget, cats, catBudgets] = await Promise.all([
+    repo.monthSummary(userId, month),
+    repo.budget(userId),
+    repo.categories(userId),
+    repo.categoryBudgets(userId),
+  ]);
   const [y, m] = month.split('-');
   const lines = [
     `${y}年${Number(m)}月の家計簿`,
@@ -357,11 +411,16 @@ async function replySummary(ctx: Ctx, month: string): Promise<void> {
   if (budget) {
     lines.push(`予算残り ${yen(budget - s.expense)}（${Math.round((s.expense / budget) * 100)}% 使用）`);
   }
-  const groups = groupByParent(s.byCategory, await repo.categories(userId));
+  const groups = groupByParent(s.byCategory, cats);
   if (groups.length) {
     lines.push('', '― カテゴリ別 ―');
     for (const g of groups) {
-      lines.push(`${g.name} ${yen(g.total)}`);
+      const cb = catBudgets.find((b) => b.categoryName === g.name);
+      if (cb) {
+        lines.push(`${g.name} ${yen(g.total)} / ${yen(cb.amount)}`);
+      } else {
+        lines.push(`${g.name} ${yen(g.total)}`);
+      }
       for (const c of g.children) lines.push(`  ${c.name} ${yen(c.amount)}`);
     }
   }

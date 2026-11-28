@@ -5,6 +5,7 @@ import {
   accountChange,
   balanceChange,
   budgetChange,
+  categoryBudgetChange,
   entryChange,
   fixedCostChange,
   goalChange,
@@ -112,15 +113,20 @@ export function createServer(env: McpEnv, userId: string): McpServer {
     },
     async ({ month }) => {
       const m = month ?? monthOf(todayJST());
-      const [s, cats, budget] = await Promise.all([
+      const [s, cats, budget, catBudgets] = await Promise.all([
         repo.monthSummary(userId, m),
         repo.categories(userId),
         repo.budget(userId),
+        repo.categoryBudgets(userId),
       ]);
-      const groups = groupByParent(s.byCategory, cats).map((g) => ({
-        ...g,
-        share: s.expense ? Math.round((g.total / s.expense) * 1000) / 10 : 0,
-      }));
+      const groups = groupByParent(s.byCategory, cats).map((g) => {
+        const cb = catBudgets.find((b) => b.categoryName === g.name);
+        return {
+          ...g,
+          share: s.expense ? Math.round((g.total / s.expense) * 1000) / 10 : 0,
+          budget: cb?.amount ?? null,
+        };
+      });
       return result({
         month: m,
         expense: s.expense,
@@ -166,15 +172,27 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       title: '予算のペース',
       description:
         '月の予算に対する支出のペース。projectedTotal はこのペースで月末まで使ったときの支出、' +
-        'safeDailySpend は残りの日（今日を含む）に1日いくらまでなら予算に収まるか。予算がなければ budget は null。',
+        'safeDailySpend は残りの日（今日を含む）に1日いくらまでなら予算に収まるか。予算がなければ budget は null。' +
+        'byCategory にはカテゴリ別予算のペースも出る。',
       inputSchema: z.object({ month: MONTH.optional() }),
       annotations: READ_ONLY,
     },
     async ({ month }) => {
       const today = todayJST();
       const m = month ?? monthOf(today);
-      const [s, budget] = await Promise.all([repo.monthSummary(userId, m), repo.budget(userId)]);
-      return result(budgetStatus(m, today, s.expense, budget));
+      const [s, budget, cats, catBudgets] = await Promise.all([
+        repo.monthSummary(userId, m),
+        repo.budget(userId),
+        repo.categories(userId),
+        repo.categoryBudgets(userId),
+      ]);
+      const overall = budgetStatus(m, today, s.expense, budget);
+      const groups = groupByParent(s.byCategory, cats);
+      const byCategory = catBudgets.map((cb) => {
+        const spent = groups.find((g) => g.name === cb.categoryName)?.total ?? 0;
+        return { category: cb.categoryName, ...budgetStatus(m, today, spent, cb.amount) };
+      });
+      return result({ ...overall, byCategory });
     },
   );
 
@@ -347,11 +365,25 @@ export function createServer(env: McpEnv, userId: string): McpServer {
     {
       title: '月の予算を変える',
       description:
-        '月の予算（支出の上限、円）を変える。0 で予算なし。変える前に、いくらにするかをユーザーに確かめる。undo_changes で戻せる。',
-      inputSchema: z.object({ amount: z.number().int().min(0).describe('円。0 で予算なし') }),
+        '月の予算（支出の上限、円）を変える。0 で予算なし。category を指定するとカテゴリ別予算を変える（親カテゴリの名前。貯金・投資のカテゴリは不可）。' +
+        '変える前に、いくらにするかをユーザーに確かめる。undo_changes で戻せる。',
+      inputSchema: z.object({
+        amount: z.number().int().min(0).describe('円。0 で予算なし'),
+        category: z.string().optional().describe('親カテゴリの名前。省略すると全体予算'),
+      }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async ({ amount }) => {
+    async ({ amount, category }) => {
+      if (category) {
+        const before = await repo.categoryBudget(userId, category);
+        if (amount) {
+          await repo.setCategoryBudget(userId, category, amount);
+        } else {
+          await repo.deleteCategoryBudget(userId, category);
+        }
+        await repo.recordChanges(userId, crypto.randomUUID(), [categoryBudgetChange(category, before, amount)]);
+        return result({ category, before, after: amount });
+      }
       const before = await repo.budget(userId);
       await repo.setBudget(userId, amount);
       await repo.recordChanges(userId, crypto.randomUUID(), [budgetChange(before, amount)]);
@@ -639,7 +671,7 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       const today = todayJST();
       const thisMonth = monthOf(today);
       const months = [3, 2, 1].map((k) => shiftMonth(thisMonth, -k));
-      const [summaries, categories, fixedCosts, goals, accounts, balances, budget] = await Promise.all([
+      const [summaries, categories, fixedCosts, goals, accounts, balances, budget, catBudgets] = await Promise.all([
         Promise.all(months.map((m) => repo.monthSummary(userId, m))),
         repo.categories(userId),
         repo.fixedCosts(userId),
@@ -647,6 +679,7 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         repo.accounts(userId),
         repo.balances(userId),
         repo.budget(userId),
+        repo.categoryBudgets(userId),
       ]);
       return result(
         financialOverview({
@@ -661,6 +694,7 @@ export function createServer(env: McpEnv, userId: string): McpServer {
           savings: savingNames(categories),
           fixedCosts,
           budget,
+          categoryBudgets: catBudgets,
           goals,
           assets: assetSummary(accounts, balances, thisMonth, 12),
         }),
