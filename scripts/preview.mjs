@@ -117,6 +117,12 @@ function summary(month) {
     budget,
     categories: orderCategories(categories),
     remind,
+    fixedCosts: {
+      items: fixedCosts,
+      monthlyTotal: fixedCosts
+        .filter((f) => f.active)
+        .reduce((t, f) => t + (f.cycle === 'yearly' ? Math.round(f.amount / 12) : f.amount), 0),
+    },
     changes: [
       {
         batch: 'b2',
@@ -161,6 +167,14 @@ function shiftReport(year, month) {
   const r = buildReport({ jobs, allowances, wall: 1230000 }, shifts, new Set(), year, month, Date.now());
   return { ...r, errors: [], unmatchedTitles: ['歯医者'], hasJobs: true, hasCalendar: true, today };
 }
+
+const fixed = (f) => ({ cycle: 'monthly', month: 0, day: 1, active: true, autoRecord: true, memo: '', ...f });
+let fixedCosts = [
+  fixed({ id: 1, name: '家賃', amount: 60000, category: '住居', day: 27 }),
+  fixed({ id: 2, name: 'スマホ', amount: 2980, category: '通信費', day: 31, autoRecord: false }),
+  fixed({ id: 3, name: 'Amazonプライム', amount: 5900, category: '趣味', cycle: 'yearly', month: 3, day: 15 }),
+  fixed({ id: 4, name: 'ジム', amount: 7000, category: '美容', active: false }),
+];
 
 // ---------- サーバー ----------
 const json = (res, data, status = 200) => {
@@ -207,6 +221,17 @@ createServer(async (req, res) => {
   if (m && req.method === 'PATCH') {
     const e = entries.find((x) => x.id === Number(m[1]));
     if (e) Object.assign(e, Object.fromEntries(Object.entries(b).filter(([, v]) => v != null)));
+    return json(res, { ok: true });
+  }
+  if (p === '/api/fixed/candidates')
+    return json(res, [{ name: 'Netflix', category: '趣味', amount: 1490, months: 3, lastDate: `${thisMonth}-05` }]);
+  if (p === '/api/fixed') {
+    const f = fixed({ ...b, id: b.id || Date.now() });
+    fixedCosts = [...fixedCosts.filter((x) => x.id !== f.id), f];
+    return json(res, f);
+  }
+  if (p.startsWith('/api/fixed/')) {
+    fixedCosts = fixedCosts.filter((x) => x.id !== Number(p.split('/').pop()));
     return json(res, { ok: true });
   }
   if (p === '/api/changes/undo') return json(res, { ok: true, undone: ['追加：食費 ¥800（ランチ）'], skipped: [] });
