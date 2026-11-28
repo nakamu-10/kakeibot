@@ -34,6 +34,12 @@
         font-size: 18px;
         font-weight: 700;
       }
+      .saving-line {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--line);
+        font-size: 15px;
+      }
       .budget {
         margin-top: 16px;
         padding-top: 14px;
@@ -394,6 +400,12 @@
             <div class="value num income" id="s-income"></div>
             <div class="value num" id="s-balance"></div>
           </div>
+          <div class="saving-line" id="s-saving-box">
+            <div class="inline" style="justify-content: space-between">
+              <span>貯金・投資に回した額</span><strong class="num" id="s-saving"></strong>
+            </div>
+            <div class="muted">支出には入れていません。</div>
+          </div>
           <div class="budget" id="budget-box">
             <div class="inline" style="justify-content: space-between">
               <span>予算の残り</span><strong class="num" id="budget-left"></strong>
@@ -694,6 +706,10 @@
           ><span>どのカテゴリの中に入れるか</span>
           <select id="cs-parent"></select>
         </label>
+        <label class="switch" id="cs-saving-row" style="margin-bottom: 12px">
+          <span>貯金・投資（NISA の積立など。使ったお金ではないので、支出に数えない）</span>
+          <input id="cs-saving" type="checkbox" />
+        </label>
         <label class="field"
           ><span>このカテゴリにする言葉（「ランチ, コンビニ」のように、なくてもよい）</span>
           <input id="cs-keywords" />
@@ -778,6 +794,8 @@
         $('s-expense').textContent = yen(data.expense);
         $('s-income').textContent = yen(data.income);
         $('s-balance').textContent = yen(data.income - data.expense);
+        $('s-saving-box').style.display = data.saving ? '' : 'none';
+        $('s-saving').textContent = yen(data.saving);
         if (data.budget > 0) {
           const rate = data.expense / data.budget;
           $('budget-box').style.display = '';
@@ -825,17 +843,25 @@
             datasets: [
               { label: '支出', data: data.trend.map((t) => t.expense), backgroundColor: '#f2a1a3', borderRadius: 6 },
               { label: '収入', data: data.trend.map((t) => t.income), backgroundColor: '#7fd8a8', borderRadius: 6 },
+              {
+                label: '貯金・投資',
+                data: data.trend.map((t) => t.saving),
+                backgroundColor: '#6cc3e6',
+                borderRadius: 6,
+              },
             ],
           },
           options: { ...baseOpts(), plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } } },
         });
         $('trend-table').innerHTML =
-          '<tr><th></th><th class="num">支出</th><th class="num">収入</th><th class="num">収支</th></tr>' +
+          '<tr><th></th><th class="num">支出</th><th class="num">貯金</th><th class="num">収入</th><th class="num">収支</th></tr>' +
           data.trend
             .slice()
             .reverse()
             .map(
-              (t) => `<tr><td>${Number(t.month.slice(5))}月</td><td class="num">${yen(t.expense)}</td>
+              (
+                t,
+              ) => `<tr><td>${Number(t.month.slice(5))}月</td><td class="num">${yen(t.expense)}</td><td class="num">${yen(t.saving)}</td>
       <td class="num">${yen(t.income)}</td><td class="num ${t.income - t.expense < 0 ? 'expense' : ''}">${yen(t.income - t.expense)}</td></tr>`,
             )
             .join('');
@@ -867,6 +893,9 @@
             .join('') || '<p class="muted">この月の記録はありません。</p>';
       }
 
+      /** カテゴリの下に小さく出す説明（貯金・投資の印と、キーワード） */
+      const catNote = (c) => [c.saving ? '支出に数えない' : '', c.keywords].filter(Boolean).join('・');
+
       /** 同じ親を持つカテゴリ（並び替えはこの中で） */
       const siblings = (c) => data.categories.filter((x) => x.type === c.type && x.parentId === c.parentId);
       const parentOf = (c) => data.categories.find((x) => x.id === c.parentId);
@@ -885,7 +914,7 @@
               const sibs = siblings(c);
               const i = sibs.indexOf(c);
               return `<div class="cat-item ${c.parentId ? 'child' : ''}">
-          <button class="name" onclick="openCategory(${c.id})">${esc(c.name)}${c.keywords ? `<small>${esc(c.keywords)}</small>` : ''}</button>
+          <button class="name" onclick="openCategory(${c.id})">${esc(c.name)}${catNote(c) ? `<small>${esc(catNote(c))}</small>` : ''}</button>
           <button class="move" aria-label="上へ" onclick="moveCat(${c.id}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
           <button class="move" aria-label="下へ" onclick="moveCat(${c.id}, 1)" ${i === sibs.length - 1 ? 'disabled' : ''}>↓</button>
         </div>`;
@@ -1409,7 +1438,14 @@
           '<option value="0">どこにも入れない（一番上）</option>' +
           tops.map((c) => `<option value="${c.id}">${esc(c.name)} の中</option>`).join('');
         $('cs-parent').value = String(editingCat?.parentId || 0);
+        refreshSavingRow();
       }
+
+      // 貯金・投資の印は、一番上の段の支出のカテゴリにだけ付ける（子は親の印にならう）
+      function refreshSavingRow() {
+        $('cs-saving-row').style.display = catType === 'expense' && $('cs-parent').value === '0' ? '' : 'none';
+      }
+      $('cs-parent').onchange = refreshSavingRow;
 
       function openCategorySheet(c) {
         editingCat = c;
@@ -1418,6 +1454,7 @@
         selectCatType(c ? c.type : 'expense');
         $('cs-name').value = c ? c.name : '';
         $('cs-keywords').value = c ? c.keywords : '';
+        $('cs-saving').checked = !!c && c.saving;
         // 子を持つカテゴリは、ほかの中に入れられない（2段まで）
         $('cs-parent').disabled = !!c && data.categories.some((x) => x.parentId === c.id);
         $('cs-delete').style.display = c ? '' : 'none';
@@ -1434,7 +1471,12 @@
         ev.preventDefault();
         const name = $('cs-name').value.trim();
         if (!name) return toast('名前を入れてください');
-        const body = { name, keywords: $('cs-keywords').value, parentId: Number($('cs-parent').value) };
+        const body = {
+          name,
+          keywords: $('cs-keywords').value,
+          parentId: Number($('cs-parent').value),
+          saving: $('cs-saving-row').style.display !== 'none' && $('cs-saving').checked,
+        };
         if (editingCat) await api('/categories/' + editingCat.id, { method: 'PATCH', body: JSON.stringify(body) });
         else await api('/categories', { method: 'POST', body: JSON.stringify({ ...body, type: catType }) });
         $('cat-sheet').close();
