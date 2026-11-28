@@ -181,6 +181,41 @@
         font-weight: 600;
       }
 
+      /* ---------- 目標 ---------- */
+      .goal {
+        width: 100%;
+        padding: 12px 0;
+        border: none;
+        border-bottom: 1px solid var(--line);
+        background: none;
+        text-align: left;
+        font-size: 16px;
+      }
+      .goal:last-child {
+        border-bottom: none;
+      }
+      .goal .head {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      /* button の中に div は置けないので、span を .meter の形にする */
+      .goal .meter,
+      .goal .meter > span {
+        display: block;
+      }
+      .goal .meter > span {
+        height: 100%;
+        background: var(--green);
+        border-radius: 999px;
+      }
+      .goal small {
+        display: block;
+        margin-top: 6px;
+        font-size: 13px;
+        color: var(--sub);
+      }
+
       /* ---------- AI による変更 ---------- */
       .change {
         padding: 10px 0;
@@ -395,6 +430,12 @@
           <button class="btn soft wide" id="fixed-new" style="margin-top: 8px">固定費を追加</button>
         </section>
         <section class="card">
+          <h2>貯金の目標</h2>
+          <p class="muted" id="goals-surplus" style="margin: 0 0 4px"></p>
+          <div id="goals-list"></div>
+          <button class="btn soft wide" id="goal-new" style="margin-top: 8px">目標を追加</button>
+        </section>
+        <section class="card">
           <label class="switch">
             <span>記録していない日は、夜9時に LINE で知らせる</span>
             <input id="remind" type="checkbox" />
@@ -507,6 +548,31 @@
         </label>
         <div class="actions" id="fs-actions">
           <button type="button" class="btn danger" id="fs-delete">削除</button>
+          <button type="submit" class="btn">保存</button>
+        </div>
+        <button type="button" class="btn text wide" data-close>閉じる</button>
+      </form>
+    </dialog>
+
+    <!-- 目標の追加・編集 -->
+    <dialog class="sheet" id="goal-sheet">
+      <form method="dialog" id="goal-form">
+        <div class="grabber"></div>
+        <h3 id="gs-title">目標を追加</h3>
+        <label class="field"
+          ><span>名前</span><input id="gs-name" maxlength="30" placeholder="旅行、引っ越し など"
+        /></label>
+        <label class="field"><span>目標の額</span></label>
+        <div class="amount-field">
+          <span>¥</span>
+          <input id="gs-target" type="number" inputmode="numeric" placeholder="0" aria-label="目標の額" />
+        </div>
+        <label class="field"
+          ><span>今貯まっている額</span><input id="gs-saved" type="number" inputmode="numeric" placeholder="0"
+        /></label>
+        <label class="field"><span>期限（なくてもよい）</span><input id="gs-deadline" type="month" /></label>
+        <div class="actions" id="gs-actions">
+          <button type="button" class="btn danger" id="gs-delete">削除</button>
           <button type="submit" class="btn">保存</button>
         </div>
         <button type="button" class="btn text wide" data-close>閉じる</button>
@@ -705,6 +771,7 @@
       function renderSettings() {
         renderChanges();
         renderFixed();
+        renderGoals();
         $('budget-input').value = data.budget || '';
         $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
@@ -970,6 +1037,82 @@
         $('fixed-sheet').close();
         toast('削除しました（これまでの記録は残ります）');
         candidates = null;
+        await load();
+      };
+
+      // ---------- 目標 ----------
+      let editingGoal = null;
+      const monthText = (m) => `${m.slice(0, 4)}年${Number(m.slice(5, 7))}月`;
+
+      /** 見通しを1文で。数字は画面で計算せず、API の goalPlan の結果を言葉にするだけ */
+      function goalOutlook(g) {
+        if (g.remaining === 0) return '達成しました';
+        const need = g.perMonth === null ? '' : `${monthText(g.deadline)}までに、毎月 ${yen(g.perMonth)} で届きます。`;
+        if (!g.reachMonth) return need + '今の収支では、まだ貯まるペースがありません';
+        if (g.onTrack === false) return need + `今のペースだと ${monthText(g.reachMonth)} で、間に合いません`;
+        return need + `今のペースなら ${monthText(g.reachMonth)} に届きます`;
+      }
+
+      function renderGoals() {
+        const { monthlySurplus, goals } = data.goals;
+        $('goals-surplus').textContent =
+          monthlySurplus === null
+            ? '先月までの記録がまだないので、今のペースは出せません。'
+            : `毎月の余り（先月までの3か月の平均）：${yen(monthlySurplus)}`;
+        $('goals-list').innerHTML = goals
+          .map(
+            (g) => `<button class="goal" onclick="openGoal(${g.id})">
+          <span class="head"><span>${esc(g.name)}</span><span class="num">${yen(g.saved)} / ${yen(g.target)}</span></span>
+          <span class="meter"><span style="width: ${Math.round(g.progress * 100)}%"></span></span>
+          <small>${esc(goalOutlook(g))}</small></button>`,
+          )
+          .join('');
+      }
+
+      function openGoalSheet(g) {
+        editingGoal = g;
+        $('gs-title').textContent = g ? '目標を直す' : '目標を追加';
+        $('gs-name').value = g ? g.name : '';
+        $('gs-target').value = g ? g.target : '';
+        $('gs-saved').value = g ? g.saved || '' : '';
+        $('gs-deadline').value = g ? g.deadline : '';
+        $('gs-delete').style.display = g ? '' : 'none';
+        $('gs-delete').textContent = '削除';
+        $('gs-actions').classList.toggle('two', !!g);
+        $('goal-sheet').showModal();
+      }
+      window.openGoal = (id) => openGoalSheet(data.goals.goals.find((x) => x.id === id));
+      $('goal-new').onclick = () => openGoalSheet(null);
+
+      $('goal-form').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const name = $('gs-name').value.trim();
+        const target = Number($('gs-target').value);
+        if (!name) return toast('名前を入れてください');
+        if (!(target > 0)) return toast('目標の額を入れてください');
+        await api('/goals', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: editingGoal?.id ?? 0,
+            name,
+            target,
+            saved: Number($('gs-saved').value) || 0,
+            deadline: $('gs-deadline').value,
+            memo: editingGoal?.memo ?? '',
+          }),
+        });
+        $('goal-sheet').close();
+        toast(editingGoal ? '直しました' : `「${name}」を追加しました`);
+        await load();
+      };
+      $('gs-delete').onclick = async () => {
+        if ($('gs-delete').textContent === '削除') {
+          $('gs-delete').textContent = 'もう一度押すと削除';
+          return;
+        }
+        await api('/goals/' + editingGoal.id, { method: 'DELETE' });
+        $('goal-sheet').close();
+        toast('削除しました');
         await load();
       };
 
