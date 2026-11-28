@@ -3,12 +3,20 @@ import type { McpEnv } from './env';
 
 // ライブラリは cloudflare: のモジュールを読むので Node では動かない。/callback で使うものだけ差し替える
 vi.mock('@cloudflare/workers-oauth-provider', () => ({
-  AuthorizationError: class extends Error {},
+  AuthorizationError: class extends Error {
+    constructor(
+      readonly redirectUri?: string,
+      readonly redirectTo?: string,
+    ) {
+      super('invalid_request');
+    }
+  },
   CimdFetchError: class extends Error {},
   authorizationErrorRedirect: (request: { redirectUri: string }, error: string) =>
     `${request.redirectUri}?error=${error}`,
 }));
 const { handleAuth } = await import('./auth');
+const { AuthorizationError } = await import('@cloudflare/workers-oauth-provider');
 
 const CLAUDE = 'https://claude.ai/api/mcp/auth_callback';
 
@@ -55,6 +63,17 @@ describe('/callback', () => {
     }
   });
 
+  it('許した戻り先で、LINE ログインをやめた・code がないときは access_denied で返す', async () => {
+    for (const query of ['?error=access_denied&state=s', '?state=s']) {
+      const c = callback(CLAUDE, 'Uowner', query);
+      const res = await c.run();
+      expect(res.status).toBe(302);
+      expect(res.headers.get('Location')).toBe(`${CLAUDE}?error=access_denied`);
+      expect(c.fetchMock).not.toHaveBeenCalled();
+      expect(c.completeAuthorization).not.toHaveBeenCalled();
+    }
+  });
+
   it('持ち主でない LINE アカウントは access_denied で返す', async () => {
     const c = callback(CLAUDE, 'Uother');
     const res = await c.run();
@@ -69,5 +88,34 @@ describe('/callback', () => {
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe(`${CLAUDE}?code=ok`);
     expect(c.completeAuthorization).toHaveBeenCalledOnce();
+  });
+});
+
+describe('/authorize でライブラリがエラーを出したとき', () => {
+  /** PKCE がないなど、ライブラリが戻り先へ返してよいとしたエラー */
+  function authorize(redirectUri: string) {
+    const env = {
+      OAUTH_PROVIDER: {
+        parseAuthRequest: () => {
+          throw new (AuthorizationError as unknown as new (uri: string, to: string) => Error)(
+            redirectUri,
+            `${redirectUri}?error=invalid_request&state=s`,
+          );
+        },
+      },
+    } as unknown as McpEnv;
+    return handleAuth(new Request('https://mcp.example/authorize?client_id=x'), env);
+  }
+
+  it('許していない戻り先には返さず、この画面で見せる', async () => {
+    const res = await authorize('https://evil.example.com/cb');
+    expect(res.status).toBe(400);
+    expect(res.headers.get('Location')).toBeNull();
+  });
+
+  it('許した戻り先には返す', async () => {
+    const res = await authorize(CLAUDE);
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(`${CLAUDE}?error=invalid_request&state=s`);
   });
 });

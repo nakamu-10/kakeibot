@@ -87,7 +87,15 @@ export async function handleAuth(req: Request, env: McpEnv): Promise<Response> {
     }
     return new Response('not found', { status: 404 });
   } catch (error) {
-    if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
+    // ライブラリが戻り先へ返してよいとしたエラーも、許した戻り先のときだけ返す（ほかはこの画面で見せる）
+    if (
+      error instanceof AuthorizationError &&
+      error.redirectTo &&
+      error.redirectUri &&
+      allowedRedirect(error.redirectUri, env.EXTRA_REDIRECT_URIS)
+    ) {
+      return Response.redirect(error.redirectTo, 302);
+    }
     if (error instanceof AuthorizationError || error instanceof CimdFetchError) {
       const message =
         error instanceof AuthorizationError
