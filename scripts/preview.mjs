@@ -128,6 +128,7 @@ function summary(month) {
       basis: [],
       goals: goals.map(previewPlan),
     },
+    assets: previewAssets(),
     changes: [
       {
         batch: 'b2',
@@ -205,6 +206,46 @@ let goals = [
   { id: 3, name: '生活防衛資金', target: 500000, saved: 0, accountIds: [], deadline: '', memo: '' },
 ];
 
+// src/assets.ts の assetSummary の代わり（node から拡張子なしの import を読めないため。架空のデータを見せるだけ）
+const kinds = {
+  savings: '預金・現金',
+  nisa: 'NISA',
+  ideco: 'iDeCo',
+  securities: '証券（課税）',
+  crypto: '暗号資産',
+  other: 'その他の資産',
+  debt: '借金',
+};
+let accounts = [
+  { id: 1, name: 'ゆうちょ', kind: 'savings', active: true, memo: '', balance: 320000, month: thisMonth },
+  { id: 2, name: '楽天証券 NISA', kind: 'nisa', active: true, memo: '', balance: 160000, month: thisMonth },
+  { id: 3, name: '奨学金', kind: 'debt', active: true, memo: '', balance: 480000, month: '2026-10' },
+];
+function previewAssets() {
+  const assets = accounts.filter((a) => a.kind !== 'debt').reduce((t, a) => t + a.balance, 0);
+  const debts = accounts.filter((a) => a.kind === 'debt').reduce((t, a) => t + a.balance, 0);
+  const allocation = Object.keys(kinds)
+    .filter((k) => k !== 'debt')
+    .map((kind) => ({
+      kind,
+      label: kinds[kind],
+      amount: accounts.filter((a) => a.kind === kind).reduce((t, a) => t + a.balance, 0),
+    }))
+    .filter((x) => x.amount > 0)
+    .map((x) => ({ ...x, share: x.amount / assets }));
+  const history = [-150000, -120000, -90000, -45000, 0].map((netWorth, i, list) => ({
+    month: shiftMonthPreview(thisMonth, i - list.length + 1),
+    netWorth,
+    contribution: 30000,
+    marketGain: i % 2 ? 5000 : -2000,
+  }));
+  return { kinds, accounts, totals: { assets, debts, netWorth: assets - debts }, allocation, history };
+}
+function shiftMonthPreview(month, n) {
+  const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+}
+
 // ---------- サーバー ----------
 const json = (res, data, status = 200) => {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
@@ -270,6 +311,35 @@ createServer(async (req, res) => {
   }
   if (p.startsWith('/api/goals/')) {
     goals = goals.filter((x) => x.id !== Number(p.split('/').pop()));
+    return json(res, { ok: true });
+  }
+  if (p === '/api/accounts') {
+    const acc = { balance: 0, month: '', memo: '', ...b, id: b.id || Date.now() };
+    accounts = [...accounts.filter((x) => x.id !== acc.id), acc];
+    return json(res, acc);
+  }
+  if (p.startsWith('/api/accounts/')) {
+    accounts = accounts.filter((x) => x.id !== Number(p.split('/').pop()));
+    return json(res, { ok: true });
+  }
+  if (p === '/api/balances' && req.method === 'GET')
+    return json(
+      res,
+      accounts
+        .filter((a) => a.active)
+        .map((a) => ({
+          accountId: a.id,
+          balance: null,
+          contribution: a.kind === 'nisa' ? 30000 : null,
+          lastBalance: a.balance,
+          lastMonth: a.month,
+        })),
+    );
+  if (p === '/api/balances') {
+    for (const i of b.items) {
+      const a = accounts.find((x) => x.id === i.accountId);
+      if (a && i.balance !== null) Object.assign(a, { balance: i.balance, month: b.month });
+    }
     return json(res, { ok: true });
   }
   if (p === '/api/changes/undo') return json(res, { ok: true, undone: ['追加：食費 ¥800（ランチ）'], skipped: [] });

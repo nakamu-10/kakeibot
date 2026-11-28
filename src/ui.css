@@ -173,11 +173,14 @@ select:focus {
   border-color: var(--green);
   outline: none;
 }
-label.field {
+label.field,
+div.field {
   display: block;
   margin-bottom: 12px;
 }
-label.field > span {
+label.field > span,
+/* 中にボタンを並べる欄は、label にすると見出しを押したときに最初のボタンが押される */
+div.field > .caption {
   display: block;
   font-size: 14px;
   color: var(--sub);

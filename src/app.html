@@ -181,6 +181,26 @@
         font-weight: 600;
       }
 
+      /* ---------- 資産 ---------- */
+      .bal-item {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .bal-item small {
+        display: block;
+        font-size: 13px;
+        color: var(--sub);
+      }
+      .bal-item .inline {
+        margin-top: 6px;
+        align-items: center;
+      }
+      .bal-item .inline span {
+        min-width: 5.5em;
+        font-size: 14px;
+        color: var(--sub);
+      }
+
       /* ---------- 目標 ---------- */
       .goal {
         width: 100%;
@@ -412,6 +432,35 @@
         </section>
       </div>
 
+      <!-- 資産 -->
+      <div class="tab" id="tab-assets">
+        <section class="card">
+          <div class="summary">
+            <div class="label">純資産（資産 − 借金）</div>
+            <div class="main num" id="a-net"></div>
+            <div class="label">資産</div>
+            <div class="label">借金</div>
+            <div class="value num" id="a-assets"></div>
+            <div class="value num expense" id="a-debts"></div>
+          </div>
+          <button class="btn wide" id="balance-open" style="margin-top: 14px">今月の残高を入れる</button>
+        </section>
+        <section class="card">
+          <h2>資産の分け方</h2>
+          <div id="a-allocation"></div>
+        </section>
+        <section class="card">
+          <h2>純資産の推移</h2>
+          <div class="chart-box"><canvas id="c-networth"></canvas></div>
+          <p class="muted" id="a-growth" style="margin: 8px 0 0"></p>
+        </section>
+        <section class="card">
+          <h2>口座</h2>
+          <div id="a-accounts"></div>
+          <button class="btn soft wide" id="account-new" style="margin-top: 8px">口座を追加</button>
+        </section>
+      </div>
+
       <!-- 設定 -->
       <div class="tab" id="tab-settings">
         <section class="card">
@@ -472,6 +521,7 @@
       <button data-tab="home" class="on">ホーム</button>
       <button data-tab="trend">推移</button>
       <button data-tab="list">履歴</button>
+      <button data-tab="assets">資産</button>
       <button data-tab="settings">設定</button>
     </nav>
 
@@ -554,6 +604,47 @@
       </form>
     </dialog>
 
+    <!-- 口座の追加・編集 -->
+    <dialog class="sheet" id="account-sheet">
+      <form method="dialog" id="account-form">
+        <div class="grabber"></div>
+        <h3 id="as-title">口座を追加</h3>
+        <label class="field"
+          ><span>名前</span><input id="as-name" maxlength="30" placeholder="ゆうちょ、楽天証券 NISA、奨学金 など"
+        /></label>
+        <label class="field"
+          ><span>種類</span
+          ><select id="as-kind"></select
+        ></label>
+        <label class="switch" id="as-closed-row">
+          <span>解約した（これまでの残高は残す）</span>
+          <input id="as-closed" type="checkbox" />
+        </label>
+        <div class="actions" id="as-actions">
+          <button type="button" class="btn danger" id="as-delete">削除</button>
+          <button type="submit" class="btn">保存</button>
+        </div>
+        <button type="button" class="btn text wide" data-close>閉じる</button>
+      </form>
+    </dialog>
+
+    <!-- 月の残高 -->
+    <dialog class="sheet" id="balance-sheet">
+      <form method="dialog" id="balance-form">
+        <div class="grabber"></div>
+        <h3>月の残高を入れる</h3>
+        <label class="field"><span>月</span><input id="bs-month" type="month" /></label>
+        <div id="bs-items"></div>
+        <p class="muted" style="margin: 0 0 12px">
+          空のままの口座は、前の月の残高のままにします。借金は、返していない額を入れます。
+        </p>
+        <div class="actions">
+          <button type="submit" class="btn">保存</button>
+        </div>
+        <button type="button" class="btn text wide" data-close>閉じる</button>
+      </form>
+    </dialog>
+
     <!-- 目標の追加・編集 -->
     <dialog class="sheet" id="goal-sheet">
       <form method="dialog" id="goal-form">
@@ -570,6 +661,10 @@
         <label class="field"
           ><span>今貯まっている額</span><input id="gs-saved" type="number" inputmode="numeric" placeholder="0"
         /></label>
+        <div class="field" id="gs-accounts-field">
+          <span class="caption">この目標のために貯めている口座（選ぶと、その残高の合計を貯まっている額にする）</span>
+          <div class="chips" id="gs-accounts"></div>
+        </div>
         <label class="field"><span>期限（なくてもよい）</span><input id="gs-deadline" type="month" /></label>
         <div class="actions" id="gs-actions">
           <button type="button" class="btn danger" id="gs-delete">削除</button>
@@ -610,6 +705,7 @@
       // カテゴリの色（多い順に使う。8番目より後はすべて灰色）
       const CAT_COLORS = ['#f28b8f', '#6cc3e6', '#f5c45e', '#7fd3a0', '#b39be8', '#f4a66e', '#e99ac8', '#c3c9d1'];
       const $ = (id) => document.getElementById(id);
+      const color = (i) => CAT_COLORS[i] ?? CAT_COLORS.at(-1);
       const yen = (n) => (n < 0 ? '-¥' : '¥') + Math.abs(n).toLocaleString('ja-JP');
       let token = null,
         data = null,
@@ -697,7 +793,6 @@
 
         // 支出に占める割合：上に1本の帯、下にカテゴリごとの割合と金額
         const total = data.expense || 1;
-        const color = (i) => CAT_COLORS[i] ?? CAT_COLORS.at(-1);
         const pct = (v) => Math.round((v / total) * 100);
         $('cat-list').innerHTML = data.groups.length
           ? `<div class="stack">${data.groups
@@ -772,6 +867,7 @@
         renderChanges();
         renderFixed();
         renderGoals();
+        renderAssets();
         $('budget-input').value = data.budget || '';
         $('remind').checked = data.remind;
         for (const type of ['expense', 'income']) {
@@ -799,7 +895,7 @@
             y: {
               grid: { color: '#eef0f2' },
               border: { display: false },
-              ticks: { callback: (v) => (v >= 10000 ? v / 10000 + '万' : v) },
+              ticks: { callback: (v) => (Math.abs(v) >= 10000 ? v / 10000 + '万' : v) },
             },
           },
         };
@@ -1040,6 +1136,158 @@
         await load();
       };
 
+      // ---------- 資産 ----------
+      let editingAccount = null;
+      const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      const signedYen = (n) => (n > 0 ? '+' : '') + yen(n);
+
+      function renderAssets() {
+        const { kinds, accounts, totals, allocation, history } = data.assets;
+        const thisMonth = data.today.slice(0, 7);
+        $('a-net').textContent = yen(totals.netWorth);
+        $('a-assets').textContent = yen(totals.assets);
+        $('a-debts').textContent = yen(totals.debts);
+        $('balance-open').style.display = accounts.some((a) => a.active) ? '' : 'none';
+
+        $('a-allocation').innerHTML = allocation.length
+          ? `<div class="stack">${allocation
+              .map((x, i) => `<div style="flex:${x.amount};background:${color(i)}" title="${esc(x.label)}"></div>`)
+              .join('')}</div>` +
+            allocation
+              .map(
+                (x, i) => `<div class="cat-row"><div class="top">
+          <span><span class="dot" style="background:${color(i)}"></span>${esc(x.label)}</span>
+          <span class="share num">${Math.round(x.share * 100)}%</span><span class="num">${yen(x.amount)}</span></div></div>`,
+              )
+              .join('')
+          : '<p class="muted" style="margin: 0">口座を追加して残高を入れると、ここに資産の分け方が出ます。</p>';
+
+        drawChart('networth', $('c-networth'), {
+          type: 'line',
+          data: {
+            labels: history.map((h) => `${Number(h.month.slice(5, 7))}月`),
+            datasets: [
+              {
+                data: history.map((h) => h.netWorth),
+                borderColor: cssVar('--green'),
+                backgroundColor: cssVar('--green'),
+                tension: 0.3,
+              },
+            ],
+          },
+          options: baseOpts(),
+        });
+        const contribution = history.reduce((t, h) => t + h.contribution, 0);
+        const gain = history.reduce((t, h) => t + h.marketGain, 0);
+        $('a-growth').textContent =
+          contribution || gain
+            ? `投資の口座は、この${history.length}か月で、積み立てた分 ${yen(contribution)}・値動き ${signedYen(gain)}`
+            : '';
+
+        $('a-accounts').innerHTML = accounts
+          .map((a) => {
+            const when = !a.month
+              ? 'まだ残高を入れていません'
+              : a.month === thisMonth
+                ? `${Number(a.month.slice(5, 7))}月の残高`
+                : `${Number(a.month.slice(5, 7))}月の残高（今月はまだ）`;
+            return `<button class="fixed-item ${a.active ? '' : 'stopped'}" onclick="openAccount(${a.id})">
+          <span>${esc(a.name)}<small>${esc(kinds[a.kind])}・${a.active ? when : '解約'}</small></span>
+          <span class="amount num ${a.kind === 'debt' ? 'expense' : ''}">${yen(a.balance)}</span></button>`;
+          })
+          .join('');
+      }
+
+      function openAccountSheet(a) {
+        editingAccount = a;
+        $('as-title').textContent = a ? '口座を直す' : '口座を追加';
+        $('as-name').value = a ? a.name : '';
+        $('as-kind').innerHTML = Object.entries(data.assets.kinds)
+          .map(([k, label]) => `<option value="${k}">${esc(label)}</option>`)
+          .join('');
+        $('as-kind').value = a ? a.kind : 'savings';
+        $('as-closed').checked = !!a && !a.active;
+        $('as-closed-row').style.display = a ? '' : 'none';
+        $('as-delete').style.display = a ? '' : 'none';
+        $('as-delete').textContent = '削除';
+        $('as-actions').classList.toggle('two', !!a);
+        $('account-sheet').showModal();
+      }
+      window.openAccount = (id) => openAccountSheet(data.assets.accounts.find((x) => x.id === id));
+      $('account-new').onclick = () => openAccountSheet(null);
+
+      $('account-form').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const name = $('as-name').value.trim();
+        if (!name) return toast('名前を入れてください');
+        await api('/accounts', {
+          method: 'POST',
+          body: JSON.stringify({
+            id: editingAccount?.id ?? 0,
+            name,
+            kind: $('as-kind').value,
+            active: !$('as-closed').checked,
+            memo: editingAccount?.memo ?? '',
+          }),
+        });
+        $('account-sheet').close();
+        toast(editingAccount ? '直しました' : `「${name}」を追加しました`);
+        await load();
+      };
+      $('as-delete').onclick = async () => {
+        if ($('as-delete').textContent === '削除') {
+          $('as-delete').textContent = 'もう一度押すと削除（これまでの残高も消えます）';
+          return;
+        }
+        await api('/accounts/' + editingAccount.id, { method: 'DELETE' });
+        $('account-sheet').close();
+        toast('削除しました');
+        await load();
+      };
+
+      async function fillBalanceItems() {
+        const form = await api('/balances?month=' + $('bs-month').value);
+        $('bs-items').innerHTML = form
+          .map((f) => {
+            const a = data.assets.accounts.find((x) => x.id === f.accountId);
+            const last = f.lastMonth ? `前回 ${Number(f.lastMonth.slice(5, 7))}月 ${yen(f.lastBalance)}` : 'はじめて';
+            return `<div class="bal-item">
+          <div>${esc(a.name)}<small>${esc(data.assets.kinds[a.kind])}・${last}</small></div>
+          <div class="inline"><span>残高</span><input type="number" inputmode="numeric" data-balance="${a.id}"
+            value="${f.balance ?? ''}" placeholder="${f.lastBalance ?? 0}" aria-label="${esc(a.name)}の残高" /></div>
+          ${
+            f.contribution === null
+              ? ''
+              : `<div class="inline"><span>入れた額</span><input type="number" inputmode="numeric" data-contribution="${a.id}"
+            value="${f.contribution}" aria-label="${esc(a.name)}にこの月に入れた額" /></div>`
+          }
+        </div>`;
+          })
+          .join('');
+      }
+      $('balance-open').onclick = async () => {
+        $('bs-month').value = data.today.slice(0, 7);
+        await fillBalanceItems();
+        $('balance-sheet').showModal();
+      };
+      $('bs-month').onchange = () => $('bs-month').value && fillBalanceItems();
+
+      $('balance-form').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const items = [...$('bs-items').querySelectorAll('[data-balance]')].map((input) => ({
+          accountId: Number(input.dataset.balance),
+          balance: input.value === '' ? null : Number(input.value),
+          contribution: Number(
+            $('bs-items').querySelector(`[data-contribution="${input.dataset.balance}"]`)?.value || 0,
+          ),
+        }));
+        if (!items.some((i) => i.balance !== null)) return toast('残高を入れてください');
+        await api('/balances', { method: 'POST', body: JSON.stringify({ month: $('bs-month').value, items }) });
+        $('balance-sheet').close();
+        toast('残高を入れました');
+        await load();
+      };
+
       // ---------- 目標 ----------
       let editingGoal = null;
       const monthText = (m) => `${m.slice(0, 4)}年${Number(m.slice(5, 7))}月`;
@@ -1074,17 +1322,36 @@
         $('gs-title').textContent = g ? '目標を直す' : '目標を追加';
         $('gs-name').value = g ? g.name : '';
         $('gs-target').value = g ? g.target : '';
-        // 口座をつないだ目標は、残高の合計を使うので手では入れない
-        const linked = !!g && g.accountIds.length > 0;
-        $('gs-saved').value = g && !linked ? g.saved || '' : '';
-        $('gs-saved').disabled = linked;
-        $('gs-saved').placeholder = linked ? `口座の残高から（今 ${yen(g.saved)}）` : '0';
+        goalAccounts = new Set(g ? g.accountIds : []);
+        const choices = data.assets.accounts.filter((a) => a.kind !== 'debt' && (a.active || goalAccounts.has(a.id)));
+        $('gs-accounts-field').style.display = choices.length ? '' : 'none';
+        $('gs-accounts').innerHTML = choices
+          .map((a) => `<button type="button" class="chip" data-account="${a.id}">${esc(a.name)}</button>`)
+          .join('');
+        $('gs-saved').value = g && !g.accountIds.length ? g.saved || '' : '';
+        refreshGoalAccounts();
         $('gs-deadline').value = g ? g.deadline : '';
         $('gs-delete').style.display = g ? '' : 'none';
         $('gs-delete').textContent = '削除';
         $('gs-actions').classList.toggle('two', !!g);
         $('goal-sheet').showModal();
       }
+      let goalAccounts = new Set();
+      // 口座を選んだ目標は、残高の合計を使うので手では入れない
+      function refreshGoalAccounts() {
+        for (const b of $('gs-accounts').children)
+          b.classList.toggle('on', goalAccounts.has(Number(b.dataset.account)));
+        const linked = goalAccounts.size > 0;
+        $('gs-saved').disabled = linked;
+        $('gs-saved').placeholder = linked ? '選んだ口座の残高から' : '0';
+      }
+      $('gs-accounts').onclick = (ev) => {
+        const id = Number(ev.target.dataset.account);
+        if (!id) return;
+        if (goalAccounts.has(id)) goalAccounts.delete(id);
+        else goalAccounts.add(id);
+        refreshGoalAccounts();
+      };
       window.openGoal = (id) => openGoalSheet(data.goals.goals.find((x) => x.id === id));
       $('goal-new').onclick = () => openGoalSheet(null);
 
@@ -1101,7 +1368,7 @@
             name,
             target,
             saved: Number($('gs-saved').value) || 0,
-            accountIds: editingGoal?.accountIds ?? [],
+            accountIds: [...goalAccounts],
             deadline: $('gs-deadline').value,
             memo: editingGoal?.memo ?? '',
           }),
@@ -1265,7 +1532,7 @@
           (b.onclick = () => {
             document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
             document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
-            const settings = b.dataset.tab === 'settings';
+            const settings = b.dataset.tab === 'settings' || b.dataset.tab === 'assets';
             $('monthbar').style.display = settings ? 'none' : '';
             $('fab').style.display = settings ? 'none' : '';
             window.scrollTo(0, 0);

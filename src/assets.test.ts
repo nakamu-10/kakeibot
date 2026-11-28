@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assetSummary, isInvestment, sameAccount, sanitizeAccount, type Balance } from './assets';
+import { assetSummary, balanceForm, isInvestment, sameAccount, sanitizeAccount, type Balance } from './assets';
 
 describe('sanitizeAccount', () => {
   it('型と範囲をそろえる。知らない種類は預金に', () => {
@@ -79,6 +79,28 @@ describe('assetSummary', () => {
       '2026-09',
       '2026-10',
       '2026-11',
+    ]);
+  });
+});
+
+describe('balanceForm', () => {
+  const bank = sanitizeAccount({ id: 1, name: '銀行', kind: 'savings' });
+  const nisa = sanitizeAccount({ id: 2, name: 'NISA', kind: 'nisa' });
+  const closed = sanitizeAccount({ id: 3, name: '昔の口座', active: false });
+  const balances: Balance[] = [
+    { accountId: 1, month: '2026-09', balance: 300000, contribution: 0 },
+    { accountId: 2, month: '2026-10', balance: 135000, contribution: 30000 },
+    { accountId: 2, month: '2026-11', balance: 160000, contribution: 25000 },
+  ];
+  it('まだ入れていない月は、前の残高を目安に、入れた額は前の月と同じ', () => {
+    expect(balanceForm([bank, nisa, closed], balances, '2026-12')).toEqual([
+      { accountId: 1, balance: null, contribution: null, lastBalance: 300000, lastMonth: '2026-09' },
+      { accountId: 2, balance: null, contribution: 25000, lastBalance: 160000, lastMonth: '2026-11' },
+    ]);
+  });
+  it('もう入れた月は、その値', () => {
+    expect(balanceForm([nisa], balances, '2026-11')).toEqual([
+      { accountId: 2, balance: 160000, contribution: 25000, lastBalance: 135000, lastMonth: '2026-10' },
     ]);
   });
 });

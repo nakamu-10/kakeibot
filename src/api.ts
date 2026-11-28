@@ -4,6 +4,7 @@ import { verifyIdToken } from './line';
 import { json, monthOf, shiftMonth, todayJST } from './util';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from './fixed';
 import { loadGoals, sanitizeGoal } from './goals';
+import { ACCOUNT_KINDS, assetSummary, balanceForm, isInvestment, sanitizeAccount } from './assets';
 import { undoBatch } from './changes';
 import { groupByParent, orderCategories, parentError, parentName } from './category';
 import { handleShiftApi } from './shift/api';
@@ -27,7 +28,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   if (method === 'GET' && path === '/summary') {
     const q = url.searchParams.get('month') ?? '';
     const month = /^\d{4}-\d{2}$/.test(q) ? q : monthOf(todayJST());
-    const [summary, trend, budget, categories, remind, changes, fixed, goals] = await Promise.all([
+    const [summary, trend, budget, categories, remind, changes, fixed, goals, accounts, balances] = await Promise.all([
       repo.monthSummary(userId, month),
       repo.trend(userId, month, 6),
       repo.budget(userId),
@@ -36,6 +37,8 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       repo.changeBatches(userId, 10),
       repo.fixedCosts(userId),
       loadGoals(repo, userId, todayJST()),
+      repo.accounts(userId),
+      repo.balances(userId),
     ]);
     return json({
       ...summary,
@@ -48,6 +51,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
       changes,
       fixedCosts: { items: fixed, monthlyTotal: monthlyTotal(fixed) },
       goals,
+      assets: { kinds: ACCOUNT_KINDS, ...assetSummary(accounts, balances, monthOf(todayJST())) },
       today: todayJST(),
     });
   }
@@ -80,7 +84,13 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
 
   // 貯金の目標
   if (method === 'POST' && path === '/goals') {
-    const g = sanitizeGoal(body);
+    const accounts = await repo.accounts(userId);
+    const raw = sanitizeGoal(body);
+    // 借金の口座や、ない口座はつながない
+    const g = {
+      ...raw,
+      accountIds: raw.accountIds.filter((id) => accounts.some((a) => a.id === id && a.kind !== 'debt')),
+    };
     if (!g.target) return json({ error: '目標の額を入れてください' }, 400);
     if (g.id && !(await repo.getGoal(userId, g.id))) return json({ error: 'その目標は見つかりませんでした' }, 404);
     return json(await repo.saveGoal(userId, g));
@@ -88,6 +98,34 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
   const goalMatch = path.match(/^\/goals\/(\d+)$/);
   if (method === 'DELETE' && goalMatch) {
     await repo.deleteGoal(userId, Number(goalMatch[1]));
+    return json({ ok: true });
+  }
+
+  // 資産（画面からの変更は人が見ているので、変更の履歴には残さない。ADR 0012）
+  if (method === 'POST' && path === '/accounts') {
+    const a = sanitizeAccount(body);
+    if (a.id && !(await repo.getAccount(userId, a.id))) return json({ error: 'その口座は見つかりませんでした' }, 404);
+    return json(await repo.saveAccount(userId, a));
+  }
+  const accountMatch = path.match(/^\/accounts\/(\d+)$/);
+  if (method === 'DELETE' && accountMatch) {
+    await repo.deleteAccount(userId, Number(accountMatch[1]));
+    return json({ ok: true });
+  }
+  if (path === '/balances') {
+    const month = str(method === 'GET' ? url.searchParams.get('month') : body.month);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return json({ error: '月が正しくありません' }, 400);
+    const accounts = await repo.accounts(userId);
+    if (method === 'GET') return json(balanceForm(accounts, await repo.balances(userId), month));
+    const items = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : [];
+    for (const item of items) {
+      const account = accounts.find((a) => a.id === Number(item.accountId));
+      const balance = Math.round(Number(item.balance));
+      // 空のままの口座は入れない（前の月の残高のままにする）
+      if (!account || item.balance === null || item.balance === '' || !(balance >= 0)) continue;
+      const contribution = isInvestment(account.kind) ? Math.max(0, Math.round(Number(item.contribution)) || 0) : 0;
+      await repo.setBalance(userId, { accountId: account.id, month, balance, contribution });
+    }
     return json({ ok: true });
   }
 
