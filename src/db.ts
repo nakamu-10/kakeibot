@@ -2,6 +2,7 @@ import type { Change, ChangeOp, ChangeTarget, StoredChange } from './changes';
 import type { Category, Entry, EntryType } from './types';
 import { sanitizeFixedCost, type FixedCost } from './fixed';
 import { sanitizeGoal, type Goal } from './goals';
+import { sanitizeAccount, type Account, type Balance } from './assets';
 import { DEFAULT_CATEGORIES } from './parse';
 import { sanitizeJob, type Allowance, type Job } from './shift/calc';
 import { daysInMonth, shiftMonth } from './util';
@@ -444,6 +445,91 @@ export class Repo {
     await this.db
       .prepare('INSERT INTO goals (id, user_id, name, target, saved, deadline, memo) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(g.id, userId, g.name, g.target, g.saved, g.deadline, g.memo)
+      .run();
+  }
+
+  // ---------- 資産 ----------
+  async accounts(userId: string): Promise<Account[]> {
+    const r = await this.db
+      .prepare('SELECT id, name, kind, active, memo FROM accounts WHERE user_id = ? ORDER BY active DESC, id')
+      .bind(userId)
+      .all();
+    return r.results.map((row) => sanitizeAccount({ ...row, active: row.active === 1 }));
+  }
+
+  async getAccount(userId: string, id: number): Promise<Account | null> {
+    return (await this.accounts(userId)).find((a) => a.id === id) ?? null;
+  }
+
+  /** id が 0 なら足し、そうでなければ上書きする。保存したものを返す */
+  async saveAccount(userId: string, a: Account): Promise<Account> {
+    const fields = [a.name, a.kind, a.active ? 1 : 0, a.memo];
+    if (a.id > 0) {
+      await this.db
+        .prepare('UPDATE accounts SET name = ?, kind = ?, active = ?, memo = ? WHERE id = ? AND user_id = ?')
+        .bind(...fields, a.id, userId)
+        .run();
+      return a;
+    }
+    const r = await this.db
+      .prepare('INSERT INTO accounts (name, kind, active, memo, user_id) VALUES (?, ?, ?, ?, ?) RETURNING id')
+      .bind(...fields, userId)
+      .first<{ id: number }>();
+    if (!r) throw new Error('insert failed');
+    return { ...a, id: r.id };
+  }
+
+  /** 口座と、その口座の残高をすべて消す */
+  async deleteAccount(userId: string, id: number): Promise<void> {
+    await this.db.batch([
+      this.db.prepare('DELETE FROM balances WHERE account_id = ? AND user_id = ?').bind(id, userId),
+      this.db.prepare('DELETE FROM accounts WHERE id = ? AND user_id = ?').bind(id, userId),
+    ]);
+  }
+
+  /** 消した口座を、同じ id で戻す（取り消し用） */
+  async restoreAccount(userId: string, a: Account): Promise<void> {
+    await this.db
+      .prepare('INSERT INTO accounts (id, user_id, name, kind, active, memo) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(a.id, userId, a.name, a.kind, a.active ? 1 : 0, a.memo)
+      .run();
+  }
+
+  async balances(userId: string): Promise<Balance[]> {
+    const r = await this.db
+      .prepare(
+        'SELECT account_id AS accountId, month, balance, contribution FROM balances WHERE user_id = ? ORDER BY month, account_id',
+      )
+      .bind(userId)
+      .all<Balance>();
+    return r.results;
+  }
+
+  async getBalance(userId: string, accountId: number, month: string): Promise<Balance | null> {
+    return (
+      (await this.db
+        .prepare(
+          'SELECT account_id AS accountId, month, balance, contribution FROM balances WHERE user_id = ? AND account_id = ? AND month = ?',
+        )
+        .bind(userId, accountId, month)
+        .first<Balance>()) ?? null
+    );
+  }
+
+  async setBalance(userId: string, b: Balance): Promise<void> {
+    await this.db
+      .prepare(
+        `INSERT INTO balances (account_id, user_id, month, balance, contribution) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (account_id, month) DO UPDATE SET balance = excluded.balance, contribution = excluded.contribution, updated_at = datetime('now')`,
+      )
+      .bind(b.accountId, userId, b.month, b.balance, b.contribution)
+      .run();
+  }
+
+  async deleteBalance(userId: string, accountId: number, month: string): Promise<void> {
+    await this.db
+      .prepare('DELETE FROM balances WHERE user_id = ? AND account_id = ? AND month = ?')
+      .bind(userId, accountId, month)
       .run();
   }
 

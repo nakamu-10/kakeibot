@@ -25,6 +25,7 @@ Cloudflare Workers + D1 + TypeScript。レシート読取は Gemini API（Intera
 - `src/line.ts`：署名検証・返信・画像取得・クイックリプライ・プッシュ
 - `src/changes.ts`：AI が加えた変更の履歴と取り消し（1回の依頼ごと。その後に人が直したものは戻さない）。MCP で記録や設定を変えるツールは、必ず `recordChanges` で残す
 - `src/fixed.ts`：固定費・サブスク（毎月へのならし・候補探し・払う日）。`src/fixedDaily.ts`：払う日の朝に家計簿へ記録する（給料日と同じ Cron）
+- `src/goals.ts`：貯金の目標と見通し（画面と AI で同じ `loadGoals`）。`src/assets.ts`：口座と月の残高、純資産・分け方・推移（ADR 0014）
 - `src/remind.ts`：記録忘れ通知（Cron Trigger、毎晩21時。`src/index.ts` の `scheduled` で crons ごとに分ける）
 - `src/shift/`：シフト収入
   - `calc.ts`：シフトから給料・入金予定を計算する（純粋関数。時刻は日本時間固定）

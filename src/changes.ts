@@ -1,6 +1,7 @@
 import type { Repo } from './db';
 import { sameFixedCost, type FixedCost } from './fixed';
 import { sameGoal, type Goal } from './goals';
+import { ACCOUNT_KINDS, sameAccount, type Account, type Balance } from './assets';
 import type { Entry } from './types';
 import { yen } from './util';
 
@@ -9,7 +10,7 @@ import { yen } from './util';
  * 1回の依頼（ツールの1回の呼び出し）で変えたものを、同じ batch にまとめて残す
  */
 
-export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost' | 'goal';
+export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost' | 'goal' | 'account' | 'balance';
 export type ChangeOp = 'insert' | 'update' | 'delete';
 
 export interface Change {
@@ -82,6 +83,30 @@ export function goalChange(op: ChangeOp, before: Goal | null, after: Goal | null
   return { target: 'goal', targetId: (after ?? before)?.id ?? 0, op, before, after, summary };
 }
 
+export function accountChange(op: ChangeOp, before: Account | null, after: Account | null): Change {
+  const show = (a: Account) => `${a.name}（${ACCOUNT_KINDS[a.kind]}）${a.active ? '' : '・解約'}`;
+  const summary =
+    op === 'insert' && after
+      ? `口座を追加：${show(after)}`
+      : before && after
+        ? `口座を変更：${show(before)} → ${show(after)}`
+        : '';
+  return { target: 'account', targetId: (after ?? before)?.id ?? 0, op, before, after, summary };
+}
+
+export function balanceChange(name: string, before: Balance | null, after: Balance): Change {
+  const month = `${Number(after.month.slice(5, 7))}月`;
+  const show = (b: Balance) => yen(b.balance) + (b.contribution ? `（入れた額 ${yen(b.contribution)}）` : '');
+  return {
+    target: 'balance',
+    targetId: after.accountId,
+    op: before ? 'update' : 'insert',
+    before,
+    after,
+    summary: `${name}の${month}の残高：${before ? `${show(before)} → ` : ''}${show(after)}`,
+  };
+}
+
 /** 固定費や目標のように、id で読み書きするもの */
 interface RecordStore<T> {
   get(id: number): Promise<T | null>;
@@ -143,6 +168,14 @@ export async function undoBatch(
       restore: (g) => repo.restoreGoal(userId, g),
       save: (g) => repo.saveGoal(userId, g),
     } satisfies RecordStore<Goal>,
+    account: {
+      get: (id) => repo.getAccount(userId, id),
+      same: sameAccount,
+      // 追加を取り消すときは、その後に入れた残高も消える
+      remove: (id) => repo.deleteAccount(userId, id),
+      restore: (a) => repo.restoreAccount(userId, a),
+      save: (a) => repo.saveAccount(userId, a),
+    } satisfies RecordStore<Account>,
   };
   for (const c of [...changes].sort((a, b) => b.id - a.id)) {
     if (c.target === 'budget') {
@@ -156,8 +189,26 @@ export async function undoBatch(
       undone.push(c.summary);
       continue;
     }
-    if (c.target === 'fixed_cost' || c.target === 'goal') {
-      const ok = c.target === 'goal' ? await undoRecord(stores.goal, c) : await undoRecord(stores.fixed_cost, c);
+    if (c.target === 'balance') {
+      const after = c.after as Balance;
+      const before = c.before as Balance | null;
+      const current = await repo.getBalance(userId, after.accountId, after.month);
+      if (!current || current.balance !== after.balance || current.contribution !== after.contribution) {
+        skipped.push(`${c.summary}（その後に変わったので戻していません）`);
+        continue;
+      }
+      if (before) await repo.setBalance(userId, before);
+      else await repo.deleteBalance(userId, after.accountId, after.month);
+      undone.push(c.summary);
+      continue;
+    }
+    if (c.target === 'fixed_cost' || c.target === 'goal' || c.target === 'account') {
+      const ok =
+        c.target === 'goal'
+          ? await undoRecord(stores.goal, c)
+          : c.target === 'account'
+            ? await undoRecord(stores.account, c)
+            : await undoRecord(stores.fixed_cost, c);
       if (ok) undone.push(c.summary);
       else skipped.push(`${c.summary}（その後に変わったので戻していません）`);
       continue;
