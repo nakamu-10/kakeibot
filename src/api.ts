@@ -193,7 +193,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
     const error = parentError(await repo.categories(userId), { id: 0, type }, parentId);
     if (error) return json({ error }, 400);
     try {
-      await repo.addCategory(userId, name, type, str(body.keywords), parentId);
+      await repo.addCategory(userId, name, type, str(body.keywords), parentId, body.saving === true);
     } catch {
       return json({ error: '同じ名前のカテゴリがあります' }, 409);
     }
@@ -224,6 +224,7 @@ export async function handleApi(req: Request, env: Env, url: URL): Promise<Respo
         parentId,
         name: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 20) : undefined,
         keywords: typeof body.keywords === 'string' ? body.keywords : undefined,
+        saving: typeof body.saving === 'boolean' ? body.saving : undefined,
       });
       return json({ ok: true });
     }

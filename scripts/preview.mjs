@@ -46,10 +46,11 @@ const categories = [
   ['給与', 'income', 0, '給料,バイト'],
   ['仕送り', 'income', 0, '仕送り'],
   ['その他収入', 'income', 0, ''],
-].map(([name, type, parentId, keywords], i) => ({ id: i + 1, name, type, sort: i, keywords, parentId }));
+].map(([name, type, parentId, keywords], i) => ({ id: i + 1, name, type, sort: i, keywords, parentId, saving: false }));
 categories.push(
-  { id: 11, name: '雑貨', type: 'expense', sort: 0, keywords: '', parentId: 2 },
-  { id: 12, name: '洗剤・消耗品', type: 'expense', sort: 1, keywords: '洗剤', parentId: 2 },
+  { id: 11, name: '雑貨', type: 'expense', sort: 0, keywords: '', parentId: 2, saving: false },
+  { id: 12, name: '洗剤・消耗品', type: 'expense', sort: 1, keywords: '洗剤', parentId: 2, saving: false },
+  { id: 13, name: '貯金・投資', type: 'expense', sort: 7, keywords: '積立,nisa', parentId: 0, saving: true },
 );
 
 const day = (d) => `${thisMonth}-${String(d).padStart(2, '0')}`;
@@ -60,6 +61,7 @@ let entries = [
   [2, 'expense', '食費', 2480, '', 'スーパー'],
   [3, 'expense', '雑貨', 550, 'ハンガー', ''],
   [5, 'expense', '趣味', 1200, '本', ''],
+  [5, 'expense', '貯金・投資', 4000, 'NISA 積立', ''],
   [6, 'expense', '食費', 630, 'コンビニ', ''],
   [8, 'expense', '交際費', 4000, '飲み会', ''],
   [10, 'expense', '衣服', 3990, '', 'ユニクロ'],
@@ -94,8 +96,11 @@ function summary(month) {
   const daily = new Array(new Date(Date.UTC(+month.slice(0, 4), +month.slice(5), 0)).getUTCDate()).fill(0);
   let expense = 0;
   let income = 0;
+  let saving = 0;
+  const savings = new Set(categories.filter((c) => c.saving).map((c) => c.name));
   for (const e of list) {
-    if (e.type === 'expense') {
+    if (e.type === 'expense' && savings.has(e.category)) saving += e.amount;
+    else if (e.type === 'expense') {
       expense += e.amount;
       byCategory[e.category] = (byCategory[e.category] ?? 0) + e.amount;
       daily[Number(e.date.slice(8)) - 1] += e.amount;
@@ -103,12 +108,15 @@ function summary(month) {
   }
   const trend = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5) - 6 + i, 1)).toISOString().slice(0, 7);
-    return d === month ? { month: d, expense, income } : { month: d, expense: 38000 + i * 1500, income: 90000 };
+    return d === month
+      ? { month: d, expense, income, saving }
+      : { month: d, expense: 38000 + i * 1500, income: 90000, saving: 4000 };
   });
   return {
     month,
     expense,
     income,
+    saving,
     byCategory,
     groups: groupByParent(byCategory, categories),
     daily,
