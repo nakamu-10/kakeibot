@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { groupByParent } from '../src/category';
+import { groupByParent, savingNames } from '../src/category';
 import {
   accountChange,
   balanceChange,
@@ -105,7 +105,8 @@ export function createServer(env: McpEnv, userId: string): McpServer {
     {
       title: '月の収支',
       description:
-        'その月の支出・収入・収支と、支出のカテゴリ別（親でまとめ、子の内訳つき。share は支出全体に占める割合%）、月の予算。',
+        'その月の支出・収入・収支と、支出のカテゴリ別（親でまとめ、子の内訳つき。share は支出全体に占める割合%）、月の予算。' +
+        'expense は使ったお金で、貯金・投資のカテゴリ（NISA の積立など。純資産は減らない）は入れず saving に分ける。balance は収入 − 支出で、貯金・投資に回した分を含む余り。',
       inputSchema: z.object({ month: MONTH.optional() }),
       annotations: READ_ONLY,
     },
@@ -125,6 +126,8 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         expense: s.expense,
         income: s.income,
         balance: s.income - s.expense,
+        saving: s.saving,
+        savingByCategory: s.savingByCategory,
         budget: budget || null,
         expenseByCategory: groups,
         incomeByCategory: s.incomeByCategory,
@@ -149,8 +152,8 @@ export function createServer(env: McpEnv, userId: string): McpServer {
         repo.categories(userId),
       ]);
       return result({
-        monthA: { month: month_a, expense: a.expense, income: a.income },
-        monthB: { month: month_b, expense: b.expense, income: b.income },
+        monthA: { month: month_a, expense: a.expense, income: a.income, saving: a.saving },
+        monthB: { month: month_b, expense: b.expense, income: b.income, saving: b.saving },
         expenseDiff: b.expense - a.expense,
         byCategory: compareGroups(groupByParent(a.byCategory, cats), groupByParent(b.byCategory, cats)),
       });
@@ -623,6 +626,7 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       title: 'お金の相談のまとめ',
       description:
         'お金の相談を始めるときに最初に呼ぶ。直近3か月（今月を除く。記録のない月は数えない）の収入・支出・余りの平均、' +
+        '（expense は使ったお金。NISA の積立などの貯金・投資は saving に分け、surplus は収入 − 支出、leftAfterSaving は貯金・投資に回したあとに残る額）、' +
         'カテゴリごとの支出の平均と割合、固定費（毎月にならした額）、予算と平均の差、預金・現金で生活費の何か月分を持っているか、' +
         '目標ごとの毎月の額と見通し（totalPerMonth と monthlySurplus を比べる）、資産の合計・分け方・期間中の変化（積み立てた分と値動き）を返す。' +
         '相談の例：毎月いくら貯金・投資に回せるか、目標から逆算するといくら要るか、資産の分け方の見直し、資産の推移のふりかえり、お金の使い方。' +
@@ -651,8 +655,10 @@ export function createServer(env: McpEnv, userId: string): McpServer {
             month: s.month,
             income: s.income,
             expense: s.expense,
+            saving: s.saving,
             byCategory: Object.fromEntries(groupByParent(s.byCategory, categories).map((g) => [g.name, g.total])),
           })),
+          savings: savingNames(categories),
           fixedCosts,
           budget,
           goals,

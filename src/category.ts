@@ -43,6 +43,14 @@ export interface CategoryGroup {
 }
 
 /** カテゴリ別の金額を、親でまとめる（多い順） */
+/** 貯金・投資のカテゴリの名前（印の付いたカテゴリと、その子） */
+export function savingNames(cats: Pick<Category, 'id' | 'name' | 'type' | 'parentId' | 'saving'>[]): Set<string> {
+  const flagged = new Set(cats.filter((c) => c.type === 'expense' && c.saving).map((c) => c.id));
+  return new Set(
+    cats.filter((c) => c.type === 'expense' && (flagged.has(c.id) || flagged.has(c.parentId))).map((c) => c.name),
+  );
+}
+
 export function groupByParent(
   byCategory: Record<string, number>,
   cats: Pick<Category, 'id' | 'name' | 'parentId'>[],
