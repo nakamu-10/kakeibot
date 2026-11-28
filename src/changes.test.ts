@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { budgetChange, entryChange, fixedCostChange, sameEntry } from './changes';
+import { budgetChange, entryChange, fixedCostChange, goalChange, sameEntry } from './changes';
+import { sanitizeGoal } from './goals';
 import { sanitizeFixedCost } from './fixed';
 import type { Entry } from './types';
 
@@ -47,6 +48,18 @@ describe('fixedCostChange', () => {
     expect(fixedCostChange('update', prime, { ...prime, active: false }).summary).toBe(
       '固定費を変更：Amazonプライム ¥5,900/年 → Amazonプライム ¥5,900/年（やめた）',
     );
+  });
+});
+
+describe('goalChange', () => {
+  it('目標の要約。期限があれば月まで', () => {
+    const trip = sanitizeGoal({ id: 5, name: '旅行', target: 300000, saved: 60000, deadline: '2027-08' });
+    expect(goalChange('insert', null, trip)).toMatchObject({
+      target: 'goal',
+      targetId: 5,
+      summary: '目標を追加：旅行 ¥60,000/¥300,000（2027年8月まで）',
+    });
+    expect(goalChange('delete', { ...trip, deadline: '' }, null).summary).toBe('目標を削除：旅行 ¥60,000/¥300,000');
   });
 });
 

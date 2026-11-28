@@ -137,3 +137,17 @@ CREATE TABLE IF NOT EXISTS fixed_costs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fixed_costs_user ON fixed_costs (user_id);
+
+-- 貯金の目標
+CREATE TABLE IF NOT EXISTS goals (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  target     INTEGER NOT NULL,                  -- 目標の額
+  saved      INTEGER NOT NULL DEFAULT 0,        -- 今貯まっている額（ユーザーか AI が入れる）
+  deadline   TEXT NOT NULL DEFAULT '',          -- 'YYYY-MM'。なければ ''
+  memo       TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_goals_user ON goals (user_id);

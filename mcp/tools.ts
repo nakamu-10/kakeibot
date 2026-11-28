@@ -1,7 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { groupByParent } from '../src/category';
-import { budgetChange, entryChange, fixedCostChange, undoBatch } from '../src/changes';
+import { budgetChange, entryChange, fixedCostChange, goalChange, undoBatch } from '../src/changes';
+import { averageSurplus, goalPlan, sanitizeGoal } from '../src/goals';
 import { findRecurring, monthlyTotal, sanitizeFixedCost } from '../src/fixed';
 import { Repo } from '../src/db';
 import { loadReport } from '../src/shift/report';
@@ -424,6 +425,76 @@ export function createServer(env: McpEnv, userId: string): McpServer {
       if (!before) return error(`id ${id} の固定費が見つかりません。`);
       await repo.deleteFixedCost(userId, id);
       await repo.recordChanges(userId, crypto.randomUUID(), [fixedCostChange('delete', before, null)]);
+      return result({ deleted: before });
+    },
+  );
+
+  // ---------- 目標 ----------
+  server.registerTool(
+    'list_goals',
+    {
+      title: '貯金の目標と見通し',
+      description:
+        '貯金の目標（金額・期限・今貯まっている額）と見通し。monthlySurplus は直近3か月（今月を除く）の収支の平均で、記録のない月は数えない。' +
+        'perMonth は期限までに届くための毎月の額、reachMonth と onTrack は、余りをすべてその目標に回したときに届く月と、期限に間に合うか。' +
+        '目標が複数あれば余りを分け合うので、perMonth の合計と monthlySurplus を比べて考える。' +
+        'saved はユーザーが入れた額なので、古ければ今いくら貯まっているかを聞いて save_goal で直す。',
+      annotations: READ_ONLY,
+    },
+    async () => {
+      const thisMonth = monthOf(todayJST());
+      const [goals, trend] = await Promise.all([repo.goals(userId), repo.trend(userId, shiftMonth(thisMonth, -1), 3)]);
+      const monthlySurplus = averageSurplus(trend);
+      return result({
+        monthlySurplus,
+        basis: trend,
+        goals: goals.map((g) => ({ ...g, ...goalPlan(g, thisMonth, monthlySurplus) })),
+      });
+    },
+  );
+
+  server.registerTool(
+    'save_goal',
+    {
+      title: '目標を登録・変更する',
+      description:
+        '貯金の目標を登録する（id を省く）か、変える（id を渡す。すべての項目を送る）。今貯まっている額（saved）の更新にも使う。undo_changes で戻せる。',
+      inputSchema: z.object({
+        id: z.number().int().optional(),
+        name: z.string().min(1).max(30),
+        target: z.number().int().positive().describe('目標の額（円）'),
+        saved: z.number().int().min(0).default(0).describe('今貯まっている額（円）'),
+        deadline: z
+          .string()
+          .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+          .optional()
+          .describe("期限の月 'YYYY-MM'。なければ省く"),
+        memo: z.string().max(100).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    },
+    async (args) => {
+      const before = args.id ? await repo.getGoal(userId, args.id) : null;
+      if (args.id && !before) return error(`id ${args.id} の目標が見つかりません。`);
+      const saved = await repo.saveGoal(userId, sanitizeGoal({ ...args, id: args.id ?? 0 }));
+      await repo.recordChanges(userId, crypto.randomUUID(), [goalChange(before ? 'update' : 'insert', before, saved)]);
+      return result({ before, after: saved });
+    },
+  );
+
+  server.registerTool(
+    'delete_goal',
+    {
+      title: '目標を消す',
+      description: '目標を消す。undo_changes で戻せる。',
+      inputSchema: z.object({ id: z.number().int() }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    },
+    async ({ id }) => {
+      const before = await repo.getGoal(userId, id);
+      if (!before) return error(`id ${id} の目標が見つかりません。`);
+      await repo.deleteGoal(userId, id);
+      await repo.recordChanges(userId, crypto.randomUUID(), [goalChange('delete', before, null)]);
       return result({ deleted: before });
     },
   );

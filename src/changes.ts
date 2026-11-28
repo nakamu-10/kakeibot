@@ -1,5 +1,6 @@
 import type { Repo } from './db';
 import { sameFixedCost, type FixedCost } from './fixed';
+import { sameGoal, type Goal } from './goals';
 import type { Entry } from './types';
 import { yen } from './util';
 
@@ -8,7 +9,7 @@ import { yen } from './util';
  * 1回の依頼（ツールの1回の呼び出し）で変えたものを、同じ batch にまとめて残す
  */
 
-export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost';
+export type ChangeTarget = 'entry' | 'budget' | 'fixed_cost' | 'goal';
 export type ChangeOp = 'insert' | 'update' | 'delete';
 
 export interface Change {
@@ -67,6 +68,40 @@ export function fixedCostChange(op: ChangeOp, before: FixedCost | null, after: F
   return { target: 'fixed_cost', targetId: (after ?? before)?.id ?? 0, op, before, after, summary };
 }
 
+export function goalChange(op: ChangeOp, before: Goal | null, after: Goal | null): Change {
+  const show = (g: Goal) =>
+    `${g.name} ${yen(g.saved)}/${yen(g.target)}${g.deadline ? `（${g.deadline.slice(0, 4)}年${Number(g.deadline.slice(5, 7))}月まで）` : ''}`;
+  const summary =
+    op === 'insert' && after
+      ? `目標を追加：${show(after)}`
+      : op === 'delete' && before
+        ? `目標を削除：${show(before)}`
+        : before && after
+          ? `目標を変更：${show(before)} → ${show(after)}`
+          : '';
+  return { target: 'goal', targetId: (after ?? before)?.id ?? 0, op, before, after, summary };
+}
+
+/** 固定費や目標のように、id で読み書きするもの */
+interface RecordStore<T> {
+  get(id: number): Promise<T | null>;
+  same(a: T, b: T): boolean;
+  remove(id: number): Promise<void>;
+  restore(value: T): Promise<void>;
+  save(value: T): Promise<unknown>;
+}
+
+/** 1件を元に戻す。その後に変わっていたら戻さずに false */
+async function undoRecord<T>(store: RecordStore<T>, c: StoredChange): Promise<boolean> {
+  const current = await store.get(c.targetId);
+  const untouched = c.op === 'delete' ? !current : current !== null && store.same(current, c.after as T);
+  if (!untouched) return false;
+  if (c.op === 'insert') await store.remove(c.targetId);
+  else if (c.op === 'delete') await store.restore(c.before as T);
+  else await store.save(c.before as T);
+  return true;
+}
+
 /** 記録が、変えたあとのまま（その後に誰も直していない）か */
 export function sameEntry(current: EntryFields, expected: EntryFields): boolean {
   return (
@@ -93,6 +128,22 @@ export async function undoBatch(
 ): Promise<{ undone: string[]; skipped: string[] }> {
   const undone: string[] = [];
   const skipped: string[] = [];
+  const stores = {
+    fixed_cost: {
+      get: (id) => repo.getFixedCost(userId, id),
+      same: sameFixedCost,
+      remove: (id) => repo.deleteFixedCost(userId, id),
+      restore: (f) => repo.restoreFixedCost(userId, f),
+      save: (f) => repo.saveFixedCost(userId, f),
+    } satisfies RecordStore<FixedCost>,
+    goal: {
+      get: (id) => repo.getGoal(userId, id),
+      same: sameGoal,
+      remove: (id) => repo.deleteGoal(userId, id),
+      restore: (g) => repo.restoreGoal(userId, g),
+      save: (g) => repo.saveGoal(userId, g),
+    } satisfies RecordStore<Goal>,
+  };
   for (const c of [...changes].sort((a, b) => b.id - a.id)) {
     if (c.target === 'budget') {
       const before = (c.before as { amount: number }).amount;
@@ -105,17 +156,10 @@ export async function undoBatch(
       undone.push(c.summary);
       continue;
     }
-    if (c.target === 'fixed_cost') {
-      const current = await repo.getFixedCost(userId, c.targetId);
-      const ok = c.op === 'delete' ? !current : current !== null && sameFixedCost(current, c.after as FixedCost);
-      if (!ok) {
-        skipped.push(`${c.summary}（その後に変わったので戻していません）`);
-        continue;
-      }
-      if (c.op === 'insert') await repo.deleteFixedCost(userId, c.targetId);
-      else if (c.op === 'delete') await repo.restoreFixedCost(userId, c.before as FixedCost);
-      else await repo.saveFixedCost(userId, c.before as FixedCost);
-      undone.push(c.summary);
+    if (c.target === 'fixed_cost' || c.target === 'goal') {
+      const ok = c.target === 'goal' ? await undoRecord(stores.goal, c) : await undoRecord(stores.fixed_cost, c);
+      if (ok) undone.push(c.summary);
+      else skipped.push(`${c.summary}（その後に変わったので戻していません）`);
       continue;
     }
     const current = await repo.getEntry(userId, c.targetId);
